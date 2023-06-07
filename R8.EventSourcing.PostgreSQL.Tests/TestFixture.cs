@@ -14,7 +14,10 @@ namespace R8.EventSourcing.PostgreSQL.Tests
         {
             _serviceProvider = new ServiceCollection()
                 .AddLogging()
-                .AddEntityFrameworkAuditProvider(options => { options.IgnoredColumns = new[] { nameof(IEntityAggregateRoot.Id) }; })
+                .AddEntityFrameworkAuditProvider(options =>
+                {
+                    options.ExcludedColumns.Add(nameof(IAggregateEntity.Id));
+                })
                 .AddDbContext<DummyDbContext>((serviceProvider, optionsBuilder) =>
                 {
                     optionsBuilder.UseNpgsql(DummyDbContextFactory.ConnectionString);

@@ -10,7 +10,7 @@ namespace R8.EventSourcing.PostgreSQL
         /// <summary>
         /// A <see cref="JsonSerializerOptions"/> that used for <see cref="Audit"/> serialization.
         /// </summary>
-        public static JsonSerializerOptions Settings
+        public static JsonSerializerOptions DefaultSettings
         {
             get
             {

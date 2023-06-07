@@ -5,7 +5,7 @@ using System.Text.Json;
 
 namespace R8.EventSourcing.PostgreSQL
 {
-    public abstract record AuditableAggregateRoot : IAuditable, IAuditableDelete
+    public abstract record AggregateAuditable : IAuditable, IAuditableDelete
     {
         public bool IsDeleted { get; set; }
 
@@ -22,7 +22,7 @@ namespace R8.EventSourcing.PostgreSQL
             if (Audits == null)
                 return Array.Empty<Audit>();
 
-            var audits = this.Audits.Deserialize<Audit[]>(AuditJsonSettings.Settings);
+            var audits = this.Audits.Deserialize<Audit[]>(AuditJsonSettings.DefaultSettings);
             return audits;
         }
     }

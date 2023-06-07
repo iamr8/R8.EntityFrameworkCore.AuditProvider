@@ -133,7 +133,7 @@ namespace R8.EventSourcing.PostgreSQL
                     : new List<Audit>();
                 audits.Add(audit);
 
-                entityAuditable.Audits = JsonSerializer.SerializeToDocument(audits, AuditJsonSettings.Settings);
+                entityAuditable.Audits = JsonSerializer.SerializeToDocument(audits, _options.JsonOptions);
                 _logger.LogDebug("Entity {EntityName} with state {EntityState} is audited", entry.Entity.GetType().Name, entry.State);
             }
 
@@ -142,13 +142,9 @@ namespace R8.EventSourcing.PostgreSQL
 
         private PropertyEntry[] GetPropertyEntries(EntityEntry entityEntry)
         {
-            var exclusions = new List<string> { nameof(IAuditable.Audits) };
-
-            if (_options.IgnoredColumns != null && _options.IgnoredColumns.Any())
-                exclusions.AddRange(_options.IgnoredColumns);
-
+            var exclusions = _options.ExcludedColumns.Distinct().ToArray();
             var propertyEntries = entityEntry.Members
-                .Where(x => !exclusions.Contains(x.Metadata.Name) && x is PropertyEntry)
+                .Where(entry => !exclusions.Contains(entry.Metadata.Name) && entry is PropertyEntry)
                 .Cast<PropertyEntry>()
                 .ToArray();
             return propertyEntries;
@@ -178,7 +174,7 @@ namespace R8.EventSourcing.PostgreSQL
                 if (changeHandlers.Any(x => x.CanHandle(propertyEntry.Metadata.ClrType)))
                 {
                     var changeHandler = changeHandlers.First(x => x.CanHandle(propertyEntry.Metadata.ClrType));
-                    if (!changeHandler.Handle(propertyEntry.CurrentValue, propertyEntry.OriginalValue, AuditJsonSettings.Settings))
+                    if (!changeHandler.Handle(propertyEntry.CurrentValue, propertyEntry.OriginalValue, _options.JsonOptions))
                         continue;
                     
                     newString = changeHandler.NewValue;
