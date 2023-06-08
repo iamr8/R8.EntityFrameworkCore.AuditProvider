@@ -7,7 +7,7 @@ Simple Event-sourcing for PostgreSQL database using Entity Framework Core.
 // ... other services
 
 // Add AuditProvider
-.AddEntityFrameworkAuditProvider(options =>
+services.AddEntityFrameworkAuditProvider(options =>
 {
     // Your options 
 });
