@@ -33,7 +33,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\R8.EntityFrameworkAuditProvider\R8.EntityFrameworkAuditProvider.csproj" />
+      <ProjectReference Include="..\R8.EntityFrameworkCore.AuditProvider\R8.EntityFrameworkCore.AuditProvider.csproj" />
     </ItemGroup>
 
 </Project>

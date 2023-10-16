@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 
-namespace R8.EntityFrameworkAuditProvider.Tests;
+namespace R8.EntityFrameworkCore.AuditProvider.Tests;
 
 public static class Utils
 {

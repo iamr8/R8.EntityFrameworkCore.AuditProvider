@@ -1,4 +1,4 @@
-namespace R8.EntityFrameworkAuditProvider
+namespace R8.EntityFrameworkCore.AuditProvider
 {
     /// <summary>
     /// A class to represent user that made changes to be used in <see cref="EntityFrameworkAuditProviderInterceptor"/>.

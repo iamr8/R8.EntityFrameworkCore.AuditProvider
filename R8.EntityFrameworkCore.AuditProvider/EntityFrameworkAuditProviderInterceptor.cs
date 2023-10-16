@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Logging;
 
-namespace R8.EntityFrameworkAuditProvider
+namespace R8.EntityFrameworkCore.AuditProvider
 {
     /// <summary>
     /// An Interceptor to audit changes in <see cref="DbContext"/>.

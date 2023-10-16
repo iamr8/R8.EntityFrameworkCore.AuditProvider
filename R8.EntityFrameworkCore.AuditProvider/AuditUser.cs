@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace R8.EntityFrameworkAuditProvider
+namespace R8.EntityFrameworkCore.AuditProvider
 {
     public record struct AuditUser
     {

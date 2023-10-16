@@ -1,4 +1,4 @@
-﻿namespace R8.EntityFrameworkAuditProvider
+﻿namespace R8.EntityFrameworkCore.AuditProvider
 {
     /// <summary>
     /// An <see cref="AuditFlag"/> enum that represents the audit flags.

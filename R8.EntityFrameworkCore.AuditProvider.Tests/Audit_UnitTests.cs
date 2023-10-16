@@ -4,11 +4,11 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.Extensions.Logging;
-using R8.EntityFrameworkAuditProvider.Converters;
-using R8.EntityFrameworkAuditProvider.Tests.Entities;
+using R8.EntityFrameworkCore.AuditProvider.Converters;
+using R8.EntityFrameworkCore.AuditProvider.Tests.Entities;
 using Xunit.Abstractions;
 
-namespace R8.EntityFrameworkAuditProvider.Tests;
+namespace R8.EntityFrameworkCore.AuditProvider.Tests;
 
 public class Audit_UnitTests
 {

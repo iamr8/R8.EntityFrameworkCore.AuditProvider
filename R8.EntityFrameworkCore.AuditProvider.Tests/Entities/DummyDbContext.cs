@@ -1,7 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
-namespace R8.EntityFrameworkAuditProvider.Tests.Entities
+namespace R8.EntityFrameworkCore.AuditProvider.Tests.Entities
 {
     public class DummyDbContextFactory : IDesignTimeDbContextFactory<DummyDbContext>
     {

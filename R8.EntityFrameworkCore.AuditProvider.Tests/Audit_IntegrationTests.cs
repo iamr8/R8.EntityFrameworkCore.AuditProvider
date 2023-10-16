@@ -2,9 +2,9 @@
 //
 // using Microsoft.EntityFrameworkCore;
 //
-// using R8.EntityFrameworkAuditProvider.Tests.Entities;
+// using R8.EntityFrameworkCore.AuditProvider.Tests.Entities;
 //
-// namespace R8.EntityFrameworkAuditProvider.Tests
+// namespace R8.EntityFrameworkCore.AuditProvider.Tests
 // {
 //     public class Audit_IntegrationTests : TestFixture
 //     {

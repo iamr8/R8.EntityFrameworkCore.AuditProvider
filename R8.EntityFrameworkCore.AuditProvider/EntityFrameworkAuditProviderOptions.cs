@@ -2,9 +2,9 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Unicode;
-using R8.EntityFrameworkAuditProvider.Converters;
+using R8.EntityFrameworkCore.AuditProvider.Converters;
 
-namespace R8.EntityFrameworkAuditProvider
+namespace R8.EntityFrameworkCore.AuditProvider
 {
     /// <summary>
     /// Options for <see cref="EntityFrameworkAuditProviderInterceptor"/>.

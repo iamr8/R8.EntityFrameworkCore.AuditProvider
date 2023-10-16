@@ -1,4 +1,4 @@
-namespace R8.EntityFrameworkAuditProvider
+namespace R8.EntityFrameworkCore.AuditProvider
 {
     /// <summary>
     /// Ignored the property from being tracked by <see cref="EntityFrameworkAuditProviderInterceptor"/>.

@@ -1,7 +1,7 @@
 ﻿using System.Collections;
 using System.Text.Json;
 
-namespace R8.EntityFrameworkAuditProvider.Converters
+namespace R8.EntityFrameworkCore.AuditProvider.Converters
 {
     public class AuditListHandler : AuditTypeConverter
     {

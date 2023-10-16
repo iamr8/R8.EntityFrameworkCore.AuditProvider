@@ -3,7 +3,7 @@ using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 
-namespace R8.EntityFrameworkAuditProvider.Tests.Entities
+namespace R8.EntityFrameworkCore.AuditProvider.Tests.Entities
 {
     public interface IAggregateEntity
     {
