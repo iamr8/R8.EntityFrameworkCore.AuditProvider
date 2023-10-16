@@ -11,7 +11,7 @@ A .NET 6 package for Entity Framework, providing comprehensive change tracking w
 // ... other services
 
 // Add AuditProvider
-.AddEntityFrameworkAuditProvider(options =>
+services.AddEntityFrameworkAuditProvider(options =>
 {
     // Your options here (See Options section)
 });
@@ -118,4 +118,4 @@ Stored data in `Audits` column will be like this:
 You can add some `JsonConverter`s to fit your needs. (e.g. `DateTimeToUnix`)
 
 ---
-🎆 Happy coding!
+**🎆 Happy coding!**
