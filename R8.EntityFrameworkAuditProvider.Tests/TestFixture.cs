@@ -1,8 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using R8.EventSourcing.PostgreSQL.Tests.Entities;
+using R8.EntityFrameworkAuditProvider.Tests.Entities;
 
-namespace R8.EventSourcing.PostgreSQL.Tests
+namespace R8.EntityFrameworkAuditProvider.Tests
 {
     public class TestFixture : IAsyncLifetime
     {
@@ -17,6 +17,15 @@ namespace R8.EventSourcing.PostgreSQL.Tests
                 .AddEntityFrameworkAuditProvider(options =>
                 {
                     options.ExcludedColumns.Add(nameof(IAggregateEntity.Id));
+                    options.UserProvider = sp =>
+                    {
+                        // var httpContextAccessor = sp.GetRequiredService<IHttpContextAccessor>();
+                        return new EntityFrameworkAuditUser("1", new Dictionary<string, string>
+                        {
+                            { "Username", "Foo" }
+                        });
+                    };
+                    options.IncludeStackTrace = true;
                 })
                 .AddDbContext<DummyDbContext>((serviceProvider, optionsBuilder) =>
                 {

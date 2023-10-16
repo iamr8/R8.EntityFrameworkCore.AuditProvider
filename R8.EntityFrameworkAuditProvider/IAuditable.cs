@@ -1,6 +1,6 @@
 ﻿using System.Text.Json;
 
-namespace R8.EventSourcing.PostgreSQL
+namespace R8.EntityFrameworkAuditProvider
 {
     /// <summary>
     /// An <see cref="IAuditable"/> interface that represents an entity that is auditable.

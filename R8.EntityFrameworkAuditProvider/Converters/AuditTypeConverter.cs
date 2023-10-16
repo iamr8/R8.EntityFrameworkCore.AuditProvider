@@ -1,8 +1,8 @@
 ﻿using System.Text.Json;
 
-namespace R8.EventSourcing.PostgreSQL.ChangeHandlers
+namespace R8.EntityFrameworkAuditProvider.Converters
 {
-    public interface IAuditChangeHandler
+    public interface IAuditTypeHandler
     {
         /// <summary>
         /// Gets a <see cref="string"/> value that represents the new value of the property.
@@ -26,18 +26,18 @@ namespace R8.EventSourcing.PostgreSQL.ChangeHandlers
         /// </summary>
         /// <param name="currentValue">A <see cref="object"/> value that represents the current value of the property.</param>
         /// <param name="originalValue">A <see cref="object"/> value that represents the original value of the property.</param>
-        /// <param name="serializer">A <see cref="JsonSerializerOptions"/> that represents the serializer options.</param>
+        /// <param name="serializerOptions">A <see cref="JsonSerializerOptions"/> that represents the serializer options.</param>
         /// <returns>A <see cref="bool"/> value indicating whether the change should be recorded or not.</returns>
-        bool Handle(object? currentValue, object? originalValue, JsonSerializerOptions serializer);
+        bool Handle(object? currentValue, object? originalValue, JsonSerializerOptions serializerOptions);
     }
 
-    public abstract class AuditChangeHandler : IAuditChangeHandler
+    public abstract class AuditTypeConverter : IAuditTypeHandler
     {
-        public string? NewValue { get; set; }
-        public string? OldValue { get; set; }
+        public string? NewValue { get; protected set; }
+        public string? OldValue { get; protected set; }
 
         public abstract bool CanHandle(Type clrType);
 
-        public abstract bool Handle(object? currentValue, object? originalValue, JsonSerializerOptions serializer);
+        public abstract bool Handle(object? currentValue, object? originalValue, JsonSerializerOptions serializerOptions);
     }
 }

@@ -1,4 +1,4 @@
-namespace R8.EventSourcing.PostgreSQL
+namespace R8.EntityFrameworkAuditProvider
 {
     /// <summary>
     /// An <see cref="IAuditableDelete"/> interface that enables an entity to be soft-deletable.

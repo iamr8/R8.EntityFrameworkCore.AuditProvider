@@ -1,17 +1,23 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
-namespace R8.EventSourcing.PostgreSQL.Tests.Entities
+namespace R8.EntityFrameworkAuditProvider.Tests.Entities
 {
     public class DummyDbContextFactory : IDesignTimeDbContextFactory<DummyDbContext>
     {
-        public const string ConnectionString = "Host=localhost;Database=EventSourcing;Username=postgres;Password=1";
+        public const string ConnectionString = "Host=localhost;Database=EntityFrameworkAuditProvider;Username=postgres;Password=1";
 
-        public DummyDbContext CreateDbContext(string[] args)
+        public DbContextOptions<DummyDbContext> GetOptions()
         {
             var optionsBuilder = new DbContextOptionsBuilder<DummyDbContext>();
             optionsBuilder.UseNpgsql(ConnectionString);
-            return new DummyDbContext(optionsBuilder.Options);
+            return optionsBuilder.Options;
+        }
+        
+        public DummyDbContext CreateDbContext(string[] args)
+        {
+            var options = GetOptions();
+            return new DummyDbContext(options);
         }
     }
 
@@ -21,17 +27,17 @@ namespace R8.EventSourcing.PostgreSQL.Tests.Entities
         {
         }
 
-        public virtual DbSet<FirstEntity> FirstEntities { get; set; }
-        public virtual DbSet<SecondEntity> SecondEntities { get; set; }
+        public virtual DbSet<FirstAuditableEntity> FirstEntities { get; set; }
+        public virtual DbSet<SecondAuditableEntity> SecondEntities { get; set; }
         public virtual DbSet<ThirdEntity> ThirdEntities { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            modelBuilder.Entity<FirstEntity>();
-            modelBuilder.Entity<SecondEntity>();
+            modelBuilder.Entity<FirstAuditableEntity>();
+            modelBuilder.Entity<SecondAuditableEntity>();
             modelBuilder.Entity<ThirdEntity>();
 
-            modelBuilder.Entity<FirstEntity>()
+            modelBuilder.Entity<FirstAuditableEntity>()
                 .HasMany(x => x.SecondEntities)
                 .WithOne(x => x.FirstEntity)
                 .HasForeignKey(x => x.FirstEntityId)

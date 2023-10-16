@@ -1,4 +1,4 @@
-namespace R8.EventSourcing.PostgreSQL
+namespace R8.EntityFrameworkAuditProvider
 {
     /// <summary>
     /// Ignored the property from being tracked by <see cref="EntityFrameworkAuditProviderInterceptor"/>.

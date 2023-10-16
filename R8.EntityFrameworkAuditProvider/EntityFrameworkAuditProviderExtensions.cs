@@ -2,7 +2,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
-namespace R8.EventSourcing.PostgreSQL
+namespace R8.EntityFrameworkAuditProvider
 {
     public static class EntityFrameworkAuditProviderExtensions
     {
@@ -16,7 +16,11 @@ namespace R8.EventSourcing.PostgreSQL
         {
             var opt = new EntityFrameworkAuditProviderOptions();
             options?.Invoke(opt);
-            services.TryAddSingleton<EntityFrameworkAuditProviderOptions>(_ => opt);
+            services.TryAddSingleton<EntityFrameworkAuditProviderOptions>(_ =>
+            {
+                EntityFrameworkAuditProviderOptions.JsonStaticOptions = opt.JsonOptions;
+                return opt;
+            });
             services.TryAddSingleton<EntityFrameworkAuditProviderInterceptor>();
             return services;
         }
@@ -28,7 +32,7 @@ namespace R8.EventSourcing.PostgreSQL
         /// <param name="serviceProvider">A <see cref="IServiceProvider"/> to get <see cref="EntityFrameworkAuditProviderInterceptor"/> from.</param>
         public static DbContextOptionsBuilder AddEntityFrameworkAuditProviderInterceptor(this DbContextOptionsBuilder builder, IServiceProvider serviceProvider)
         {
-            builder.AddInterceptors(new[] { serviceProvider.GetService<EntityFrameworkAuditProviderInterceptor>() });
+            builder.AddInterceptors(serviceProvider.GetService<EntityFrameworkAuditProviderInterceptor>());
             return builder;
         }
     }

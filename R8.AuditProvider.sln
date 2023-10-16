@@ -1,8 +1,8 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "R8.EventSourcing.PostgreSQL", "R8.EventSourcing.PostgreSQL\R8.EventSourcing.PostgreSQL.csproj", "{3C105F76-777C-4221-8861-24639AD77F72}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "R8.EntityFrameworkAuditProvider", "R8.EntityFrameworkAuditProvider\R8.EntityFrameworkAuditProvider.csproj", "{3C105F76-777C-4221-8861-24639AD77F72}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "R8.EventSourcing.PostgreSQL.Tests", "R8.EventSourcing.PostgreSQL.Tests\R8.EventSourcing.PostgreSQL.Tests.csproj", "{7511070B-41F5-4690-BC3C-3F1BA5BDC7A2}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "R8.EntityFrameworkAuditProvider.Tests", "R8.EntityFrameworkAuditProvider.Tests\R8.EntityFrameworkAuditProvider.Tests.csproj", "{7511070B-41F5-4690-BC3C-3F1BA5BDC7A2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

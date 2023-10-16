@@ -1,9 +1,9 @@
-﻿namespace R8.EventSourcing.PostgreSQL
+﻿namespace R8.EntityFrameworkAuditProvider
 {
     /// <summary>
-    /// An <see cref="AuditFlags"/> enum that represents the audit flags.
+    /// An <see cref="AuditFlag"/> enum that represents the audit flags.
     /// </summary>
-    public enum AuditFlags : ushort
+    public enum AuditFlag : ushort
     {
         /// <summary>
         /// This will be used when EntityAuditable is newly created.

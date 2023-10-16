@@ -1,5 +1,9 @@
-# EventSourcing
-Simple Event-sourcing for PostgreSQL database using Entity Framework Core.
+# EntityFrameworkAuditProvider
+A .NET 6 package for Entity Framework, providing comprehensive change tracking with deep insights. Capture creation, updates, deletions, and restorations of entities, including property names, old and new values, stack traces, and user details, all neatly stored in an Audits column as JSON.
+
+**Seamless Entity Auditing:** Easily integrate audit functionality into your Entity Framework applications, offering a complete audit trail enriched with stack traces and user information. Gain full visibility into entity lifecycle changes for compliance, debugging, and accountability.
+
+**Full Entity Lifecycle Visibility:** Track and visualize the complete life cycle of your entities with detailed auditing. In addition to changes, this package records the stack trace of changes and user actions, enabling a deeper understanding of data evolution and robust audit trails.
 
 ### Installation
 #### Step 1:
@@ -9,12 +13,12 @@ Simple Event-sourcing for PostgreSQL database using Entity Framework Core.
 // Add AuditProvider
 .AddEntityFrameworkAuditProvider(options =>
 {
-    // Your options 
+    // Your options here (See Options section)
 });
 
 services.AddDbContext<YourDbContext>((serviceProvider, optionsBuilder) =>
 {
-    // Your Npgsql connection string
+    // Your DbContext connection configuration here
     ...
     
     // Add AuditProviderInterceptor
@@ -32,10 +36,15 @@ public record YourEntity : AggregateAuditable
 ```
 It will add `Audits` column with `jsonb` type, and `IsDeleted` column with `boolean` type to your entity table.
 ```csharp
-public abstract record AggregateAuditable : IDisposable
+public abstract record AggregateAuditable : IAuditable, IAuditableDelete
 {
+    // provided by IAuditableDelete
     public bool IsDeleted { get; set; }
+    
+    // provided by IAuditable
     public JsonDocument? Audits { get; set; }
+    
+    // provided by IAuditable
     public virtual void Dispose() => Audits?.Dispose();
 }
 ```
@@ -43,15 +52,24 @@ public abstract record AggregateAuditable : IDisposable
 #### Step 3:
 Migrate your database.
 
+_Highly recommended to test it on a test database first, to avoid any data loss._
+
 ---
 ### Options
 `EntityFrameworkAuditProviderOptions`:
 
-| Option | Description                                                        | Default                                                                       |
-| -- |--------------------------------------------------------------------|-------------------------------------------------------------------------------|
-| `ExcludedColumns` | Columns to being excluded from auditing                            | `nameof(IAuditable.Audits)`                                             |
-| `ChangeHandlers` | Handlers to check if the changed value is eligible to be audited or not | `new AuditListChangeHandler()`, `new AuditDateTimeChangeHandler()` |
-| `JsonOptions` | Json serializer options                                            | `AuditJsonSettings.DefaultSettings`                                                            |
+| Option                           | Type                                                | Description                                                              | Default                                                                                                                            |
+|----------------------------------|-----------------------------------------------------|--------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------|
+| `ExcludedColumns`                | `IList<string>`                                     | Columns to being excluded from auditing                                  | `Audits`                                                                                                                           |
+| `TypeHandlers`                   | `IList<IAuditTypeHandler>`                          | Handlers to check if the changed value is eligible to be audited or not  | Empty. Two type handlers are already implemented as `AuditDateTimeHandler` and `AuditListHandler` which can be added to this list  |
+| `JsonOptions`                    | `System.Text.Json.JsonSerializerOptions`            | Json serializer options to serialize and deserialize audits              |                                                                                                                                    |
+| `IncludeStackTrace`              | `bool`                                              | Include stack trace in audit records                                     | `false`                                                                                                                            |
+| `ExcludedNamespacesInStackTrace` | `IList<string>`                                     | Namespaces to be excluded from stack trace                               | `System`, `Microsoft`                                                                                                              |
+| `UserProvider`                   | `Func<IServiceProvider, EntityFrameworkAuditUser>`  | User provider to get current user id                                     | `null`                                                                                                                             |
+
+---
+### Tests
+Currently tested with `Npgsql.EntityFrameworkCore.PostgreSQL 7.x`.
 
 ---
 ### Usage
@@ -97,8 +115,7 @@ Stored data in `Audits` column will be like this:
   }
 ]
 ```
-You can add some json converters to fit your needs. (e.g. `DateTime` to `Unix timestamp`)
+You can add some `JsonConverter`s to fit your needs. (e.g. `DateTimeToUnix`)
 
 ---
-### Known Issues
-`Audit.UserId` not implemented yet!
+🎆 Happy coding!
