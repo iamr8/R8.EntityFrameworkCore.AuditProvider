@@ -4,6 +4,7 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.Extensions.Logging;
+using R8.EntityFrameworkCore.AuditProvider.Abstractions;
 using R8.EntityFrameworkCore.AuditProvider.Tests.Entities;
 using Xunit.Abstractions;
 
@@ -16,7 +17,7 @@ public class Audit_UnitTests
     public Audit_UnitTests(ITestOutputHelper outputHelper)
     {
         _outputHelper = outputHelper;
-        EntityFrameworkAuditProviderOptions.JsonStaticOptions = new EntityFrameworkAuditProviderOptions().JsonOptions;
+        AuditStatic.JsonStaticOptions = new EntityFrameworkAuditProviderOptions().JsonOptions;
     }
 
     public class MockingAuditEntityEntry : IEntityEntry

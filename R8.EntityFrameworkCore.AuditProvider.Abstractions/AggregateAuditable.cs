@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 using System.Diagnostics;
 using System.Text.Json;
 
-namespace R8.EntityFrameworkCore.AuditProvider
+namespace R8.EntityFrameworkCore.AuditProvider.Abstractions
 {
     public abstract record AggregateAuditable : IAuditable, IAuditableDelete
     {
@@ -41,7 +41,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
             if (Audits == null)
                 throw new NullReferenceException(nameof(Audits));
 
-            var audits = this.Audits.Deserialize<Audit[]>(EntityFrameworkAuditProviderOptions.JsonStaticOptions);
+            var audits = this.Audits.Deserialize<Audit[]>(AuditStatic.JsonStaticOptions);
             return audits!;
         }
     }

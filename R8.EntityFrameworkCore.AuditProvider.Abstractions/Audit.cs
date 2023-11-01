@@ -1,6 +1,6 @@
 ﻿using System.Text.Json.Serialization;
 
-namespace R8.EntityFrameworkCore.AuditProvider
+namespace R8.EntityFrameworkCore.AuditProvider.Abstractions
 {
     /// <summary>
     /// An object to track creation, modification, and deletion of specific entity.

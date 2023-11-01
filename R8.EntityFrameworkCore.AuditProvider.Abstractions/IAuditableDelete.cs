@@ -1,4 +1,4 @@
-namespace R8.EntityFrameworkCore.AuditProvider
+namespace R8.EntityFrameworkCore.AuditProvider.Abstractions
 {
     /// <summary>
     /// An <see cref="IAuditableDelete"/> interface that enables an entity to be soft-deletable.

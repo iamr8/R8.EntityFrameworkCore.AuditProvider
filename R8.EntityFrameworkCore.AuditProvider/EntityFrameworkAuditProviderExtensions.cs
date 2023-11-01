@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using R8.EntityFrameworkCore.AuditProvider.Abstractions;
 
 namespace R8.EntityFrameworkCore.AuditProvider
 {
@@ -18,7 +19,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
             options?.Invoke(opt);
             services.TryAddSingleton<EntityFrameworkAuditProviderOptions>(_ =>
             {
-                EntityFrameworkAuditProviderOptions.JsonStaticOptions = opt.JsonOptions;
+                AuditStatic.JsonStaticOptions = opt.JsonOptions;
                 return opt;
             });
             services.TryAddSingleton<EntityFrameworkAuditProviderInterceptor>();

@@ -6,7 +6,6 @@
         <Nullable>enable</Nullable>
 
         <EnableNETAnalyzers>true</EnableNETAnalyzers>
-        <IsPackable>false</IsPackable>
     </PropertyGroup>
 
     <ItemGroup>
@@ -15,6 +14,10 @@
 
     <ItemGroup>
         <InternalsVisibleTo Include="$(AssemblyName).Tests"/>
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\R8.EntityFrameworkCore.AuditProvider.Abstractions\R8.EntityFrameworkCore.AuditProvider.Abstractions.csproj" />
     </ItemGroup>
 
 </Project>

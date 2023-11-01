@@ -1,4 +1,4 @@
-namespace R8.EntityFrameworkCore.AuditProvider
+namespace R8.EntityFrameworkCore.AuditProvider.Abstractions
 {
     public abstract class JsonNames
     {

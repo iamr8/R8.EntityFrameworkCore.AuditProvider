@@ -1,6 +1,6 @@
 ﻿using System.Text.Json.Serialization;
 
-namespace R8.EntityFrameworkCore.AuditProvider
+namespace R8.EntityFrameworkCore.AuditProvider.Abstractions
 {
     public readonly record struct AuditChange(string Key, string? OldValue, string? NewValue)
     {

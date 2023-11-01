@@ -1,6 +1,6 @@
 ﻿using System.Text.Json;
 
-namespace R8.EntityFrameworkCore.AuditProvider
+namespace R8.EntityFrameworkCore.AuditProvider.Abstractions
 {
     /// <summary>
     /// An <see cref="IAuditable"/> interface that represents an entity that is auditable.

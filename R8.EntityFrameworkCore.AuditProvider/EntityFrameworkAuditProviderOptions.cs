@@ -8,8 +8,6 @@ namespace R8.EntityFrameworkCore.AuditProvider
     /// </summary>
     public class EntityFrameworkAuditProviderOptions
     {
-        internal static JsonSerializerOptions? JsonStaticOptions;
-
         /// <summary>
         /// A default json serializer options to be used in serialization and deserialization of audits.
         /// </summary>
