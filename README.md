@@ -58,14 +58,12 @@ _Highly recommended to test it on a test database first, to avoid any data loss.
 ### Options
 `EntityFrameworkAuditProviderOptions`:
 
-| Option                           | Type                                                | Description                                                              | Default                                                                                                                            |
-|----------------------------------|-----------------------------------------------------|--------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------|
-| `ExcludedColumns`                | `IList<string>`                                     | Columns to being excluded from auditing                                  | `Audits`                                                                                                                           |
-| `TypeHandlers`                   | `IList<IAuditTypeHandler>`                          | Handlers to check if the changed value is eligible to be audited or not  | Empty. Two type handlers are already implemented as `AuditDateTimeHandler` and `AuditListHandler` which can be added to this list  |
-| `JsonOptions`                    | `System.Text.Json.JsonSerializerOptions`            | Json serializer options to serialize and deserialize audits              |                                                                                                                                    |
-| `IncludeStackTrace`              | `bool`                                              | Include stack trace in audit records                                     | `false`                                                                                                                            |
-| `ExcludedNamespacesInStackTrace` | `IList<string>`                                     | Namespaces to be excluded from stack trace                               | `System`, `Microsoft`                                                                                                              |
-| `UserProvider`                   | `Func<IServiceProvider, EntityFrameworkAuditUser>`  | User provider to get current user id                                     | `null`                                                                                                                             |
+| Option                           | Type                                                | Description                                                              | Default               |
+|----------------------------------|-----------------------------------------------------|--------------------------------------------------------------------------|-----------------------|
+| `JsonOptions`                    | `System.Text.Json.JsonSerializerOptions`            | Json serializer options to serialize and deserialize audits              | An optimal setting    |
+| `IncludeStackTrace`              | `bool`                                              | Include stack trace in audit records                                     | `false`               |
+| `ExcludedNamespacesInStackTrace` | `IList<string>`                                     | Namespaces to be excluded from stack trace                               | `System`, `Microsoft` |
+| `UserProvider`                   | `Func<IServiceProvider, EntityFrameworkAuditUser>`  | User provider to get current user id                                     | `null`                |
 
 ---
 ### Tests
@@ -103,6 +101,17 @@ Stored data in `Audits` column will be like this:
         "_v": "OldName", // Old value
         "v": "NewName" // New value
       }
+    ],
+    "u": {
+      "id": "1", // The user id (if provided)
+      "ad": { // The user additional info (if provided)
+        "Username": "Foo"
+      }
+    },
+    "st": // Stack trace (if enabled) [EXPERIMENTAL]
+    [
+      "Void MoveNext() (R8.EntityFrameworkCore.AuditProvider.Tests.Audit_UnitTests+<should_find_changes_including_stacktrace>d__4)",
+      "System.Threading.Tasks.Task should_find_changes_including_stacktrace(Boolean)"
     ]
   },
   {
