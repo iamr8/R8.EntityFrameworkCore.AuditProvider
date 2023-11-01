@@ -19,6 +19,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
         }
 
         public object Entity => _entry.Entity;
+        public Type EntityType => _entry.Metadata.ClrType;
         public IEnumerable<PropertyEntry> Members => _entry.Members.Cast<PropertyEntry>();
         public void DetectChanges() => _entry.DetectChanges();
         public Task ReloadAsync(CancellationToken cancellationToken = default) => _entry.ReloadAsync(cancellationToken);

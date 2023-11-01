@@ -1,8 +1,5 @@
-using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.Unicode;
-using R8.EntityFrameworkCore.AuditProvider.Converters;
 
 namespace R8.EntityFrameworkCore.AuditProvider
 {
@@ -11,42 +8,29 @@ namespace R8.EntityFrameworkCore.AuditProvider
     /// </summary>
     public class EntityFrameworkAuditProviderOptions
     {
-        internal static JsonSerializerOptions JsonStaticOptions;
+        internal static JsonSerializerOptions? JsonStaticOptions;
 
         /// <summary>
-        /// Gets or sets an array of <see cref="string"/> that represents columns to be ignored from audit.
-        /// </summary>
-        public IList<string> ExcludedColumns { get; } = new List<string> { nameof(IAuditable.Audits) };
-
-        /// <summary>
-        /// A list of <see cref="IAuditTypeHandler"/> to handle changes in audit for specific clr types.
-        /// </summary>
-        public IList<IAuditTypeHandler> TypeHandlers { get; } = new List<IAuditTypeHandler>();
-
-        /// <summary>
-        /// Gets or sets a <see cref="JsonSerializerOptions"/> that used for <see cref="Audit"/> serialization.
+        /// A default json serializer options to be used in serialization and deserialization of audits.
         /// </summary>
         /// <remarks>An optimal settings is already set.</remarks>
-        public JsonSerializerOptions JsonOptions => new()
+        public JsonSerializerOptions JsonOptions { get; } = new()
         {
-            WriteIndented = false,
-            PropertyNameCaseInsensitive = true,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
             ReferenceHandler = ReferenceHandler.IgnoreCycles,
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+            PropertyNameCaseInsensitive = true,
+            UnknownTypeHandling = JsonUnknownTypeHandling.JsonElement,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            DictionaryKeyPolicy = JsonNamingPolicy.CamelCase,
-            UnknownTypeHandling = JsonUnknownTypeHandling.JsonNode,
-            Encoder = JavaScriptEncoder.Create(UnicodeRanges.All)
+            WriteIndented = false
         };
 
         /// <summary>
-        /// Gets or sets a <see cref="bool"/> value that represents whether to store stack trace in audit or not. Default value is <c>false</c>.
+        /// [EXPERIMENTAL] Adding ability to store stack-trace in audit or not. Default value is <c>false</c>.
         /// </summary>
-        /// <remarks>Please note that auditing the entity takes more time when this property is set to <c>true</c>.</remarks>
-        public bool IncludeStackTrace { get; set; } = false;
+        public bool IncludeStackTrace { get; set; }
 
         /// <summary>
-        /// Gets or sets an array of <see cref="string"/> that represents namespaces to be ignored from stack trace. Default value is <c>System</c> and <c>Microsoft</c>.
+        /// A list of strings that represents namespaces to be ignored from stack trace. Default value is <c>System</c> and <c>Microsoft</c>.
         /// </summary>
         /// <remarks>This property is only used when <see cref="IncludeStackTrace"/> is set to <c>true</c>.</remarks>
         public IList<string> ExcludedNamespacesInStackTrace { get; } = new List<string>
@@ -55,6 +39,9 @@ namespace R8.EntityFrameworkCore.AuditProvider
             "Microsoft"
         };
         
-        public Func<IServiceProvider, EntityFrameworkAuditUser> UserProvider { get; set; }
+        /// <summary>
+        /// A <see cref="Func{TResult}"/> that represents a method to get current user.
+        /// </summary>
+        public Func<IServiceProvider, EntityFrameworkAuditUser>? UserProvider { get; set; }
     }
 }

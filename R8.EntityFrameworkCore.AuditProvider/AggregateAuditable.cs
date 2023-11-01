@@ -14,6 +14,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
         [Column(TypeName = "jsonb")]
         [DebuggerBrowsable(DebuggerBrowsableState.Collapsed)]
         [EditorBrowsable(EditorBrowsableState.Never)]
+        [IgnoreAudit]
         public JsonDocument? Audits { get; set; }
 
         [EditorBrowsable(EditorBrowsableState.Never)]

@@ -27,21 +27,17 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.Entities
         {
         }
 
-        public virtual DbSet<FirstAuditableEntity> FirstEntities { get; set; }
-        public virtual DbSet<SecondAuditableEntity> SecondEntities { get; set; }
-        public virtual DbSet<ThirdEntity> ThirdEntities { get; set; }
+        public virtual DbSet<MyAuditableEntity> MyAuditableEntities { get; set; }
+        public virtual DbSet<MyEntity> MyEntities { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            modelBuilder.Entity<FirstAuditableEntity>();
-            modelBuilder.Entity<SecondAuditableEntity>();
-            modelBuilder.Entity<ThirdEntity>();
-
-            modelBuilder.Entity<FirstAuditableEntity>()
-                .HasMany(x => x.SecondEntities)
-                .WithOne(x => x.FirstEntity)
-                .HasForeignKey(x => x.FirstEntityId)
+            modelBuilder.Entity<MyAuditableEntity>()
+                .HasMany(x => x.RelationalEntities)
+                .WithOne(x => x.MyAuditableEntity)
+                .HasForeignKey(x => x.MyAuditableEntityId)
                 .IsRequired(false);
+            modelBuilder.Entity<MyEntity>();
         }
     }
 }

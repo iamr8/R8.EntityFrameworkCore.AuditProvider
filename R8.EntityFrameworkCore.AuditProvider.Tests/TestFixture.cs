@@ -16,7 +16,6 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests
                 .AddLogging()
                 .AddEntityFrameworkAuditProvider(options =>
                 {
-                    options.ExcludedColumns.Add(nameof(IAggregateEntity.Id));
                     options.UserProvider = sp =>
                     {
                         // var httpContextAccessor = sp.GetRequiredService<IHttpContextAccessor>();

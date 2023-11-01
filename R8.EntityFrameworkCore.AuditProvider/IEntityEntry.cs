@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace R8.EntityFrameworkCore.AuditProvider
 {
@@ -13,7 +14,10 @@ namespace R8.EntityFrameworkCore.AuditProvider
     
         /// <inheritdoc cref="EntityEntry.Members"/>
         IEnumerable<PropertyEntry> Members { get; }
-    
+
+        /// <inheritdoc cref="IReadOnlyTypeBase.ClrType"/>
+        Type EntityType { get; }
+
         /// <inheritdoc cref="EntityEntry.DetectChanges"/>
         void DetectChanges();
     
