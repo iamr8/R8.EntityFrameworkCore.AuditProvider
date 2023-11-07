@@ -11,6 +11,7 @@ public static class Utils
     public static PropertyEntry<TEntity, TProperty> GetPropertyEntryWithNewValue<TDbContext, TEntity, TProperty>(this TDbContext dbContext, TEntity entity, Expression<Func<TEntity, TProperty>> propertyExpression, TProperty newValue) where TDbContext : DbContext where TEntity : class
     {
         var propEntry = dbContext.Entry(entity).Property(propertyExpression);
+        propEntry.IsModified = true;
         propEntry.OriginalValue = propertyExpression.Compile().Invoke(entity);
         propEntry.CurrentValue = newValue;
         entity.GetType().GetProperty(propertyExpression.GetMemberAccess().Name)!.SetValue(entity, newValue);

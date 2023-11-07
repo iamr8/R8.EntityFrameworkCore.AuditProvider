@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System.Collections;
+using System.Diagnostics;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
@@ -45,7 +46,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
             if (entry.State is not (EntityState.Added or EntityState.Deleted or EntityState.Modified))
                 return false;
 
-            var propertyEntries = GetPropertyEntries(entry);
+            var propertyEntries = entry.Members.OfType<PropertyEntry>().ToArray();
             if (propertyEntries.Length == 0)
             {
                 _logger.LogDebug("No changes found for {EntityName} with state {EntityState}", entry.EntityType.Name, entry.State);
@@ -210,15 +211,8 @@ namespace R8.EntityFrameworkCore.AuditProvider
             return true;
         }
 
-        private static PropertyEntry[] GetPropertyEntries(IEntityEntry entityEntry)
-        {
-            var count = entityEntry.Members.TryGetNonEnumeratedCount(out var c) ? c : entityEntry.Members.Count();
-            if (count == 0)
-                return Array.Empty<PropertyEntry>();
-
-            return entityEntry.Members.ToArray();
-        }
-
+        internal const string AuditIgnoranceTag = "IgnoreAuditing";
+        
         private (bool? Deleted, AuditChange[] Changed) GetChangedPropertyEntries(ICollection<PropertyEntry> propertyEntries)
         {
             Memory<AuditChange> memory = new AuditChange[propertyEntries.Count];
@@ -236,10 +230,29 @@ namespace R8.EntityFrameworkCore.AuditProvider
                 if ((currentNull && originalNull) || propertyEntry.CurrentValue?.Equals(propertyEntry.OriginalValue) == true)
                     continue;
 
+                if (propertyEntry is { CurrentValue: IEnumerable ce, OriginalValue: IEnumerable oe })
+                {
+                    var currentEnumerator = ce.GetEnumerator();
+                    var originalEnumerator = oe.GetEnumerator();
+                    var currentHasNext = currentEnumerator.MoveNext();
+                    var originalHasNext = originalEnumerator.MoveNext();
+                    while (currentHasNext && originalHasNext)
+                    {
+                        if (!currentEnumerator.Current.Equals(originalEnumerator.Current))
+                            break;
+
+                        currentHasNext = currentEnumerator.MoveNext();
+                        originalHasNext = originalEnumerator.MoveNext();
+                    }
+
+                    if (!currentHasNext && !originalHasNext)
+                        continue;
+                }
+
                 if (propertyName == nameof(IAuditableDelete.IsDeleted))
                 {
-                    var oldValue = !originalNull && bool.Parse(propertyEntry.OriginalValue.ToString());
-                    var newValue = !currentNull && bool.Parse(propertyEntry.CurrentValue.ToString());
+                    var oldValue = !originalNull && (bool)propertyEntry.OriginalValue;
+                    var newValue = !currentNull && (bool)propertyEntry.CurrentValue;
                     deleted = oldValue switch
                     {
                         false when newValue == true => true,

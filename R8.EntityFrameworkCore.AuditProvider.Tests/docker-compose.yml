@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  postgres:
+    container_name: r8-audit-test-postgres
+    image: postgres:latest
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1
+      POSTGRES_DB: r8-audit-test
+    ports:
+      - "54322:5432"
+    

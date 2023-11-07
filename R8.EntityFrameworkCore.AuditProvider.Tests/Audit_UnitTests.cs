@@ -32,7 +32,7 @@ public class Audit_UnitTests
 
         public EntityState State { get; set; }
         public object Entity { get; }
-        public IEnumerable<PropertyEntry> Members { get; }
+        public IEnumerable<MemberEntry> Members { get; }
         public Type EntityType { get; }
 
         public void DetectChanges()
@@ -724,6 +724,81 @@ public class Audit_UnitTests
                 2 => @"[1,2,3]",
                 _ => throw new ArgumentOutOfRangeException()
             });
+        }
+
+        _outputHelper.WriteLine(entity.Audits.RootElement.GetRawText());
+        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms");
+    }
+    
+    [Fact]
+    public async Task should_store_changes_of_list_types_with_empty_values()
+    {
+        var dbContext = new DummyDbContextFactory().CreateDbContext(Array.Empty<string>());
+
+        var options = new EntityFrameworkAuditProviderOptions();
+        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+
+        var entity = new MyAuditableEntity
+        {
+            ListOfStrings = new List<string>(),
+            ArrayOfDoubles = Array.Empty<double>(),
+            ListOfIntegers = new List<int>()
+        };
+
+        var creationMembers = new List<PropertyEntry>
+        {
+            dbContext.GetPropertyEntry(entity, x => x.ListOfStrings),
+            dbContext.GetPropertyEntry(entity, x => x.ArrayOfDoubles),
+            dbContext.GetPropertyEntry(entity, x => x.ListOfIntegers)
+        };
+        var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, creationMembers);
+        var stopWatch = Stopwatch.StartNew();
+        var success = await interceptor.StoringAuditAsync(creationEntry, dbContext);
+        stopWatch.Stop();
+        success.Should().BeFalse();
+
+        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms");
+    }
+    
+    [Fact]
+    public async Task should_store_changes_of_list_types_with_null_values()
+    {
+        var dbContext = new DummyDbContextFactory().CreateDbContext(Array.Empty<string>());
+
+        var options = new EntityFrameworkAuditProviderOptions();
+        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+
+        var entity = new MyAuditableEntity
+        {
+            NullableListOfLongs = null
+        };
+
+        var creationMembers = new List<PropertyEntry>
+        {
+            dbContext.GetPropertyEntryWithNewValue(entity, x => x.NullableListOfLongs, new List<long> { 1, 2, 3 })
+        };
+        var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, creationMembers);
+        var stopWatch = Stopwatch.StartNew();
+        var success = await interceptor.StoringAuditAsync(creationEntry, dbContext);
+        stopWatch.Stop();
+        success.Should().BeTrue();
+
+        var audits = entity.GetAudits();
+        audits.Should().NotBeNull();
+        audits.Should().ContainSingle();
+
+        var audit = audits[0];
+        audit.Flag.Should().Be(AuditFlag.Changed);
+        audit.Changes.Should().NotBeNullOrEmpty();
+        audit.Changes.Should().HaveCount(1);
+        for (var i = 0; i < audit.Changes!.Length; i++)
+        {
+            var change = audit.Changes[0];
+            change.Key.Should().Be(nameof(MyAuditableEntity.NullableListOfLongs));
+            change.OldValue.Should().BeNull();
+            change.NewValue.Should().Be(("[1,2,3]"));
         }
 
         _outputHelper.WriteLine(entity.Audits.RootElement.GetRawText());

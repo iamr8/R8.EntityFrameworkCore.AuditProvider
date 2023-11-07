@@ -13,7 +13,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
         object Entity { get; }
     
         /// <inheritdoc cref="EntityEntry.Members"/>
-        IEnumerable<PropertyEntry> Members { get; }
+        IEnumerable<MemberEntry> Members { get; }
 
         /// <inheritdoc cref="IReadOnlyTypeBase.ClrType"/>
         Type EntityType { get; }
