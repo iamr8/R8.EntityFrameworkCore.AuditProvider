@@ -31,11 +31,19 @@ namespace R8.EntityFrameworkCore.AuditProvider
         public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
         {
             var entries = eventData.Context?.ChangeTracker.Entries();
-            var entriesCount = entries.TryGetNonEnumeratedCount(out var count) ? count : entries.Count();
-            for (var i = 0; i < entriesCount; i++)
+            if (entries == null)
+                return await base.SavingChangesAsync(eventData, result, cancellationToken).ConfigureAwait(false);
+            
+            using var enumerator = entries.GetEnumerator();
+            while (enumerator.MoveNext())
             {
-                var entry = new AuditEntityEntry(entries.ElementAt(i));
-                await StoringAuditAsync(entry, eventData.Context, cancellationToken);
+                var entry = enumerator.Current;
+                var runtimeAnnotations = entry.Metadata.FindRuntimeAnnotation(AuditIgnoranceAnnotation);
+                if (runtimeAnnotations?.Value is true)
+                    continue;
+
+                var auditEntry = new AuditEntityEntry(entry);
+                var audit = await StoringAuditAsync(auditEntry, eventData.Context, cancellationToken);
             }
 
             return await base.SavingChangesAsync(eventData, result, cancellationToken).ConfigureAwait(false);
@@ -149,7 +157,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
             }
 
             var audits = entityAuditable.Audits != null
-                ? entityAuditable.Audits.Deserialize<List<Audit>>(_options.JsonOptions)
+                ? entityAuditable.Audits.Deserialize<List<Audit>>(_options.JsonOptions) ?? new List<Audit>()
                 : new List<Audit>();
             audits.Add(audit);
 
@@ -211,8 +219,8 @@ namespace R8.EntityFrameworkCore.AuditProvider
             return true;
         }
 
-        internal const string AuditIgnoranceTag = "IgnoreAuditing";
-        
+        internal const string AuditIgnoranceAnnotation = "AuditProvider:IgnoreAuditing";
+
         private (bool? Deleted, AuditChange[] Changed) GetChangedPropertyEntries(ICollection<PropertyEntry> propertyEntries)
         {
             Memory<AuditChange> memory = new AuditChange[propertyEntries.Count];
@@ -238,7 +246,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
                     var originalHasNext = originalEnumerator.MoveNext();
                     while (currentHasNext && originalHasNext)
                     {
-                        if (!currentEnumerator.Current.Equals(originalEnumerator.Current))
+                        if (!currentEnumerator.Current!.Equals(originalEnumerator.Current))
                             break;
 
                         currentHasNext = currentEnumerator.MoveNext();
@@ -251,8 +259,8 @@ namespace R8.EntityFrameworkCore.AuditProvider
 
                 if (propertyName == nameof(IAuditableDelete.IsDeleted))
                 {
-                    var oldValue = !originalNull && (bool)propertyEntry.OriginalValue;
-                    var newValue = !currentNull && (bool)propertyEntry.CurrentValue;
+                    var oldValue = !originalNull && (bool)propertyEntry.OriginalValue!;
+                    var newValue = !currentNull && (bool)propertyEntry.CurrentValue!;
                     deleted = oldValue switch
                     {
                         false when newValue == true => true,

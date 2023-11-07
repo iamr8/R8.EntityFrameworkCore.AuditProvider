@@ -1,8 +1,11 @@
 using FluentAssertions;
 
 using Microsoft.EntityFrameworkCore;
+
 using R8.EntityFrameworkCore.AuditProvider.Abstractions;
 using R8.EntityFrameworkCore.AuditProvider.Tests.Entities;
+
+[assembly: CollectionBehavior(DisableTestParallelization = true, MaxParallelThreads = 1)]
 
 namespace R8.EntityFrameworkCore.AuditProvider.Tests
 {
@@ -30,10 +33,10 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests
             var audits = entity.GetAudits();
             audits.Should().NotBeEmpty();
             audits.Should().HaveCount(2);
-            
+
             var firstAudit = audits.MinBy(x => x.DateTime);
             firstAudit.Flag.Should().Be(AuditFlag.Created);
-            
+
             var lastAudit = audits.MaxBy(x => x.DateTime);
             lastAudit.Flag.Should().Be(AuditFlag.Changed);
 
@@ -168,7 +171,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests
                 Name = "test",
                 Date = DateTime.UtcNow
             };
-            DummyDbContext.Add(entity);
+            DummyDbContext.MyAuditableEntities.Add(entity);
 
             // We need to save to checkout and provide changes in audit
             await DummyDbContext.SaveChangesAsync();
@@ -192,6 +195,37 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests
             var lastChange = lastAudit.Changes[0];
             lastChange.Key.Should().Be("Date");
             lastChange.NewValue.Should().Be(DateTime.MinValue.ToString("s"));
+        }
+
+        [Fact(Skip = "Incorrect strategy")]
+        public async Task Should_NOT_Update_DateTime_When_Auditing_Ignored()
+        {
+            // Act
+            var entity = new MyAuditableEntity
+            {
+                Name = "test",
+                Date = DateTime.UtcNow
+            };
+            DummyDbContext.MyAuditableEntities.Add(entity);
+
+            // We need to save to checkout and provide changes in audit
+            await DummyDbContext.SaveChangesAsync();
+
+            await Task.Delay(1000);
+
+            entity.Date = DateTime.MinValue;
+
+            DummyDbContext.MyAuditableEntities.IgnoreAuditing().Update(entity);
+            await DummyDbContext.SaveChangesAsync();
+
+            // Arrange
+            var audits = entity.GetAudits();
+            Assert.NotEmpty(audits);
+
+            audits.Should().ContainSingle();
+
+            var lastAudit = audits[0];
+            lastAudit.Flag.Should().Be(AuditFlag.Created);
         }
 
         [Fact]
@@ -218,10 +252,10 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests
             Assert.NotEmpty(audits);
 
             audits.Should().HaveCount(2);
-            
+
             var lastAudit = audits.MaxBy(x => x.DateTime);
             lastAudit.Flag.Should().Be(AuditFlag.Changed);
-            
+
             var changes = lastAudit.Changes;
             changes.Should().NotBeEmpty();
             changes.Should().ContainSingle();
@@ -252,10 +286,10 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests
             audits.Should().NotBeEmpty();
 
             audits.Should().HaveCount(2);
-            
+
             var lastAudit = audits.MaxBy(x => x.DateTime);
             lastAudit.Flag.Should().Be(AuditFlag.Changed);
-            
+
             var lastChange = lastAudit.Changes[0];
             lastChange.Key.Should().Be("Name");
             lastChange.OldValue.Should().Be("Original");
@@ -283,7 +317,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests
             audits.Should().NotBeEmpty();
 
             audits.Should().HaveCount(2);
-            
+
             var lastAudit = audits.MaxBy(x => x.DateTime);
             lastAudit.Flag.Should().Be(AuditFlag.Deleted);
         }
@@ -298,7 +332,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests
             };
             DummyDbContext.Add(auditable);
             await DummyDbContext.SaveChangesAsync();
-            
+
             var entity = new MyEntity
             {
                 Name = "1.0.0",
@@ -329,7 +363,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests
             DummyDbContext.Add(entity);
             await DummyDbContext.SaveChangesAsync();
 
-            await Task.Delay(500); 
+            await Task.Delay(500);
 
             DummyDbContext.Remove(entity);
             await DummyDbContext.SaveChangesAsync();
@@ -354,7 +388,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests
             var audits = entity.GetAudits();
             audits.Should().NotBeEmpty();
             audits.Should().HaveCount(4);
-            
+
             var lastAudit = audits.MaxBy(x => x.DateTime);
             lastAudit.Flag.Should().Be(AuditFlag.Changed);
         }
@@ -387,7 +421,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests
             audits.Should().NotBeEmpty();
 
             audits.Should().HaveCount(2);
-            
+
             var lastAudit = audits.MaxBy(x => x.DateTime);
             lastAudit.Flag.Should().Be(AuditFlag.Deleted);
         }

@@ -6,9 +6,11 @@ namespace R8.EntityFrameworkCore.AuditProvider
 {
     public static class AuditQueryExtensions
     {
-        public static IQueryable<T> IgnoreAuditing<T>(this IQueryable<T> queryable) where T : AggregateAuditable
+        [Obsolete]
+        public static DbSet<T> IgnoreAuditing<T>(this DbSet<T> dbSet) where T : AggregateAuditable
         {
-            return queryable.TagWith(EntityFrameworkAuditProviderInterceptor.AuditIgnoranceTag);
+            var annotation = dbSet.EntityType.SetRuntimeAnnotation(EntityFrameworkAuditProviderInterceptor.AuditIgnoranceAnnotation, true);
+            return dbSet;
         }
     }
 }
