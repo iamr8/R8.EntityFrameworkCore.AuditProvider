@@ -8,6 +8,6 @@ namespace R8.EntityFrameworkCore.AuditProvider.Abstractions
         public string UserId { get; init; }
 
         [JsonPropertyName(JsonNames.AuditUser.AdditionalData)]
-        public Dictionary<string, string> AdditionalData { get; init; }
+        public IDictionary<string, string> AdditionalData { get; init; }
     }
 }

@@ -1,12 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore.Migrations;
-using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace R8.EntityFrameworkCore.AuditProvider.Tests.Migrations
+namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Migrations
 {
     /// <inheritdoc />
     public partial class Initial : Migration
@@ -18,21 +15,17 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.Migrations
                 name: "MyAuditableEntities",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    Name = table.Column<string>(type: "text", nullable: true),
-                    LastName = table.Column<string>(type: "text", nullable: true),
-                    ListOfIntegers = table.Column<List<int>>(type: "integer[]", nullable: false),
-                    ListOfStrings = table.Column<List<string>>(type: "text[]", nullable: false),
-                    NullableListOfLongs = table.Column<List<long>>(type: "bigint[]", nullable: true),
-                    ArrayOfDoubles = table.Column<double[]>(type: "double precision[]", nullable: false),
-                    Date = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    DateOffset = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    Payload = table.Column<JsonDocument>(type: "jsonb", nullable: true),
-                    NullableInt = table.Column<int>(type: "integer", nullable: true),
-                    MyAuditableEntityId = table.Column<int>(type: "integer", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
-                    Audits = table.Column<JsonDocument>(type: "jsonb", nullable: true)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Name = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    LastName = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Double = table.Column<double>(type: "float", nullable: false),
+                    Date = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    DateOffset = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
+                    NullableInt = table.Column<int>(type: "int", nullable: true),
+                    MyAuditableEntityId = table.Column<int>(type: "int", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false),
+                    Audits = table.Column<string>(type: "nvarchar(max)", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -48,10 +41,10 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.Migrations
                 name: "MyEntities",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    Name = table.Column<string>(type: "text", nullable: true),
-                    MyAuditableEntityId = table.Column<int>(type: "integer", nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Name = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    MyAuditableEntityId = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {

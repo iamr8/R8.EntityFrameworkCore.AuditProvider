@@ -4,27 +4,30 @@ using System.Collections.Generic;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
-using R8.EntityFrameworkCore.AuditProvider.Tests.Entities;
+using R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests;
 
 #nullable disable
 
-namespace R8.EntityFrameworkCore.AuditProvider.Tests.Migrations
+namespace R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.Migrations
 {
-    [DbContext(typeof(DummyDbContext))]
-    partial class DummyDbContextModelSnapshot : ModelSnapshot
+    [DbContext(typeof(PostgreSqlDbContext))]
+    [Migration("20240125182002_Initial")]
+    partial class Initial
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "7.0.12")
+                .HasAnnotation("ProductVersion", "7.0.15")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("R8.EntityFrameworkCore.AuditProvider.Tests.Entities.MyAuditableEntity", b =>
+            modelBuilder.Entity("R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.MyAuditableEntity", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -36,7 +39,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.Migrations
                         .IsRequired()
                         .HasColumnType("double precision[]");
 
-                    b.Property<JsonDocument>("Audits")
+                    b.Property<JsonElement?>("Audits")
                         .HasColumnType("jsonb");
 
                     b.Property<DateTime>("Date")
@@ -44,6 +47,9 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.Migrations
 
                     b.Property<DateTimeOffset>("DateOffset")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<double>("Double")
+                        .HasColumnType("double precision");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
@@ -81,7 +87,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.Migrations
                     b.ToTable("MyAuditableEntities");
                 });
 
-            modelBuilder.Entity("R8.EntityFrameworkCore.AuditProvider.Tests.Entities.MyEntity", b =>
+            modelBuilder.Entity("R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.MyEntity", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -102,25 +108,25 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.Migrations
                     b.ToTable("MyEntities");
                 });
 
-            modelBuilder.Entity("R8.EntityFrameworkCore.AuditProvider.Tests.Entities.MyAuditableEntity", b =>
+            modelBuilder.Entity("R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.MyAuditableEntity", b =>
                 {
-                    b.HasOne("R8.EntityFrameworkCore.AuditProvider.Tests.Entities.MyAuditableEntity", "Parent")
+                    b.HasOne("R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.MyAuditableEntity", "Parent")
                         .WithMany("Children")
                         .HasForeignKey("MyAuditableEntityId");
 
                     b.Navigation("Parent");
                 });
 
-            modelBuilder.Entity("R8.EntityFrameworkCore.AuditProvider.Tests.Entities.MyEntity", b =>
+            modelBuilder.Entity("R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.MyEntity", b =>
                 {
-                    b.HasOne("R8.EntityFrameworkCore.AuditProvider.Tests.Entities.MyAuditableEntity", "MyAuditableEntity")
+                    b.HasOne("R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.MyAuditableEntity", "MyAuditableEntity")
                         .WithMany("MyEntities")
                         .HasForeignKey("MyAuditableEntityId");
 
                     b.Navigation("MyAuditableEntity");
                 });
 
-            modelBuilder.Entity("R8.EntityFrameworkCore.AuditProvider.Tests.Entities.MyAuditableEntity", b =>
+            modelBuilder.Entity("R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.MyAuditableEntity", b =>
                 {
                     b.Navigation("Children");
 

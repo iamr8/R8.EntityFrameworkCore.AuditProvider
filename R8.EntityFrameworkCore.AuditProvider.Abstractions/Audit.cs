@@ -1,10 +1,12 @@
-﻿using System.Text.Json.Serialization;
+﻿using System.Diagnostics;
+using System.Text.Json.Serialization;
 
 namespace R8.EntityFrameworkCore.AuditProvider.Abstractions
 {
     /// <summary>
     /// An object to track creation, modification, and deletion of specific entity.
     /// </summary>
+    [DebuggerDisplay("[{" + nameof(DateTime) + "}] {" + nameof(Flag) + "}")]
     public record struct Audit
     {
         /// <summary>
@@ -32,12 +34,6 @@ namespace R8.EntityFrameworkCore.AuditProvider.Abstractions
         [JsonPropertyName(JsonNames.Audit.User)]
         public AuditUser? User { get; set; }
 
-        /// <summary>
-        /// Gets the stack trace of changes.
-        /// </summary>
-        [JsonPropertyName(JsonNames.Audit.StackTrace)]
-        public string[] StackTrace { get; set; }
-        
         public static Audit Empty = new()
         {
             DateTime = DateTime.MinValue,

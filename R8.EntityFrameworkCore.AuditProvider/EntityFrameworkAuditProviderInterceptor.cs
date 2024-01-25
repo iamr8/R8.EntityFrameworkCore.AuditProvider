@@ -1,15 +1,13 @@
-﻿using System.Collections;
+﻿using System.Buffers;
+using System.Collections;
 using System.Diagnostics;
 using System.Reflection;
-using System.Text;
 using System.Text.Json;
-
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Logging;
-
 using R8.EntityFrameworkCore.AuditProvider.Abstractions;
 
 namespace R8.EntityFrameworkCore.AuditProvider
@@ -19,10 +17,10 @@ namespace R8.EntityFrameworkCore.AuditProvider
     /// </summary>
     public class EntityFrameworkAuditProviderInterceptor : SaveChangesInterceptor
     {
-        private readonly EntityFrameworkAuditProviderOptions _options;
+        private readonly AuditProviderOptions _options;
         private readonly ILogger<EntityFrameworkAuditProviderInterceptor> _logger;
 
-        public EntityFrameworkAuditProviderInterceptor(EntityFrameworkAuditProviderOptions options, ILogger<EntityFrameworkAuditProviderInterceptor> logger)
+        public EntityFrameworkAuditProviderInterceptor(AuditProviderOptions options, ILogger<EntityFrameworkAuditProviderInterceptor> logger)
         {
             _options = options;
             _logger = logger;
@@ -31,19 +29,15 @@ namespace R8.EntityFrameworkCore.AuditProvider
         public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
         {
             var entries = eventData.Context?.ChangeTracker.Entries();
-            if (entries == null)
-                return await base.SavingChangesAsync(eventData, result, cancellationToken).ConfigureAwait(false);
-            
-            using var enumerator = entries.GetEnumerator();
-            while (enumerator.MoveNext())
+            if (entries != null)
             {
-                var entry = enumerator.Current;
-                var runtimeAnnotations = entry.Metadata.FindRuntimeAnnotation(AuditIgnoranceAnnotation);
-                if (runtimeAnnotations?.Value is true)
-                    continue;
-
-                var auditEntry = new AuditEntityEntry(entry);
-                var audit = await StoringAuditAsync(auditEntry, eventData.Context, cancellationToken);
+                using var enumerator = entries.GetEnumerator();
+                while (enumerator.MoveNext())
+                {
+                    var entry = enumerator.Current;
+                    var auditEntry = new AuditEntityEntry(entry);
+                    var audit = await StoringAuditAsync(auditEntry, eventData.Context, cancellationToken).ConfigureAwait(false);
+                }
             }
 
             return await base.SavingChangesAsync(eventData, result, cancellationToken).ConfigureAwait(false);
@@ -99,13 +93,8 @@ namespace R8.EntityFrameworkCore.AuditProvider
                 audit.User = new AuditUser
                 {
                     UserId = user.UserId,
-                    AdditionalData = user.AdditionalData
+                    AdditionalData = user.AdditionalData,
                 };
-            }
-
-            if (_options.IncludeStackTrace)
-            {
-                audit.StackTrace = this.GetStackTrace(typeof(EntityFrameworkAuditProviderInterceptor));
             }
 
             switch (entry.State)
@@ -127,6 +116,12 @@ namespace R8.EntityFrameworkCore.AuditProvider
                             true => AuditFlag.Deleted,
                         };
 
+                        if (audit.Flag == AuditFlag.Deleted && !_options.IncludedFlags.Contains(AuditFlag.Deleted))
+                            return false;
+                        
+                        if (audit.Flag == AuditFlag.UnDeleted && !_options.IncludedFlags.Contains(AuditFlag.UnDeleted))
+                            return false;
+                        
                         _logger.LogDebug("Entity {EntityName} with state {EntityState} is marked as deleted", entry.EntityType.Name, entry.State);
                     }
                     else
@@ -137,8 +132,11 @@ namespace R8.EntityFrameworkCore.AuditProvider
                             return false;
                         }
 
+                        if (!_options.IncludedFlags.Contains(AuditFlag.Changed))
+                            return false;
+                        
                         audit.Flag = AuditFlag.Changed;
-                        audit.Changes = changes;
+                        audit.Changes = changes.ToArray();
                         _logger.LogDebug("Entity {EntityName} with state {EntityState} is changed", entry.EntityType.Name, entry.State);
                     }
 
@@ -147,6 +145,9 @@ namespace R8.EntityFrameworkCore.AuditProvider
 
                 case EntityState.Added:
                 {
+                    if (!_options.IncludedFlags.Contains(AuditFlag.Created))
+                        return false;
+                    
                     audit.Flag = AuditFlag.Created;
                     _logger.LogDebug("Entity {EntityName} with state {EntityState} is created", entry.EntityType.Name, entry.State);
                     break;
@@ -156,72 +157,55 @@ namespace R8.EntityFrameworkCore.AuditProvider
                     throw new NotSupportedException($"State {entry.State} is not supported.");
             }
 
-            var audits = entityAuditable.Audits != null
-                ? entityAuditable.Audits.Deserialize<List<Audit>>(_options.JsonOptions) ?? new List<Audit>()
-                : new List<Audit>();
-            audits.Add(audit);
-
-            entityAuditable.Audits = JsonSerializer.SerializeToDocument(audits, _options.JsonOptions);
+            var audits = GetAudits(entityAuditable, audit);
+            entityAuditable.Audits = JsonSerializer.SerializeToElement(audits, _options.JsonOptions);
 
             _logger.LogDebug("Entity {EntityName} with state {EntityState} is audited", entry.EntityType.Name, entry.State);
             return true;
         }
 
-        private string[] GetStackTrace(Type interceptorType)
+        internal Audit[] GetAudits(IAuditable entityAuditable, Audit audit)
         {
-            var stackTrace = new StackTrace();
-            var stackFrames = stackTrace.GetFrames();
-            if (stackFrames.Length == 0)
-                return Array.Empty<string>();
-
-            Memory<string> memory = new string[stackFrames.Length];
-            var lastIndex = -1;
-            foreach (var frame in stackFrames)
+            Memory<Audit> newAudits;
+            if (entityAuditable.Audits != null)
             {
-                if (TryGetMethodFromStackTrace(frame, interceptorType, out var frameStr))
-                    memory.Span[++lastIndex] = frameStr!;
+                Memory<Audit> existingAudits = entityAuditable.Audits.Value.Deserialize<Audit[]>(_options.JsonOptions);
+                if (_options.MaxStoredAudits is > 0 && existingAudits.Length >= _options.MaxStoredAudits.Value)
+                {
+                    newAudits = new Audit[_options.MaxStoredAudits.Value];
+                    var startIndex = 0;
+                    if (existingAudits.Span[0].Flag == AuditFlag.Created)
+                    {
+                        startIndex = 1;
+                        newAudits.Span[0] = existingAudits.Span[0];
+                    }
+                    
+                    startIndex = existingAudits.Length - _options.MaxStoredAudits.Value + startIndex;
+                    var adjustment = existingAudits.Span[0].Flag == AuditFlag.Created ? 0 : 1;
+                    for (var i = startIndex + 1; i < existingAudits.Length; i++)
+                    {
+                        var index = i - startIndex;
+                        newAudits.Span[index - adjustment] = existingAudits.Span[i];
+                    }
+                    newAudits.Span[^1] = audit;
+                }
+                else
+                {
+                    newAudits = new Audit[existingAudits.Length + 1];
+                    existingAudits.CopyTo(newAudits);
+                    newAudits.Span[^1] = audit;
+                }
             }
-
-            var array = memory[..(lastIndex + 1)].ToArray();
-            return array;
+            else
+            {
+                newAudits = new Audit[1];
+                newAudits.Span[0] = audit;
+            }
+            
+            return newAudits.ToArray();
         }
 
-        private bool TryGetMethodFromStackTrace(StackFrame frame, Type interceptorType, out string? rawFrame)
-        {
-            rawFrame = null;
-            if (!frame.HasMethod())
-                return false;
-
-            var methodInfo = frame.GetMethod() as MethodInfo;
-            var methodType = methodInfo!.DeclaringType;
-            var containerType = methodType?.DeclaringType;
-            if (methodType?.Namespace == null || _options.ExcludedNamespacesInStackTrace.Any(ignoredNamespace => methodType.Namespace.StartsWith(ignoredNamespace)) || methodType == interceptorType || (containerType != null && containerType == interceptorType))
-                return false;
-
-            var sb = new StringBuilder();
-            var fileName = frame.GetFileName();
-            if (!string.IsNullOrWhiteSpace(fileName))
-            {
-                sb.Append(fileName);
-                var lineNumber = frame.GetFileLineNumber();
-                if (lineNumber > 0)
-                    sb.Append(':').Append(lineNumber);
-                sb.Append('+');
-            }
-
-            sb.Append(methodInfo);
-            if (containerType != null)
-            {
-                sb.Append(" (").Append(methodType).Append(')');
-            }
-
-            rawFrame = sb.ToString();
-            return true;
-        }
-
-        internal const string AuditIgnoranceAnnotation = "AuditProvider:IgnoreAuditing";
-
-        private (bool? Deleted, AuditChange[] Changed) GetChangedPropertyEntries(ICollection<PropertyEntry> propertyEntries)
+        private (bool? Deleted, Memory<AuditChange> Changed) GetChangedPropertyEntries(ICollection<PropertyEntry> propertyEntries)
         {
             Memory<AuditChange> memory = new AuditChange[propertyEntries.Count];
             var lastIndex = -1;
@@ -255,43 +239,51 @@ namespace R8.EntityFrameworkCore.AuditProvider
 
                     if (!currentHasNext && !originalHasNext)
                         continue;
+
+                    if (currentEnumerator is IDisposable ced) ced.Dispose();
+                    if (originalEnumerator is IDisposable oed) oed.Dispose();
                 }
 
-                if (propertyName == nameof(IAuditableDelete.IsDeleted))
+                if (string.Equals(propertyName, nameof(IAuditableDelete.IsDeleted), StringComparison.Ordinal))
                 {
                     var oldValue = !originalNull && (bool)propertyEntry.OriginalValue!;
                     var newValue = !currentNull && (bool)propertyEntry.CurrentValue!;
                     deleted = oldValue switch
                     {
-                        false when newValue == true => true,
-                        true when newValue == false => false,
+                        false when newValue => true,
+                        true when !newValue => false,
                         _ => null
                     };
                     continue;
                 }
 
-                string? newString = null;
-                if (!currentNull)
-                {
-                    newString = JsonSerializer.Serialize(propertyEntry.CurrentValue, propertyType, _options.JsonOptions);
-                    if (newString.StartsWith("\"") && newString.EndsWith("\""))
-                        newString = newString[1..^1];
-                }
-
-                string? oldString = null;
-                if (!originalNull)
-                {
-                    oldString = JsonSerializer.Serialize(propertyEntry.OriginalValue, propertyType, _options.JsonOptions);
-                    if (oldString.StartsWith("\"") && oldString.EndsWith("\""))
-                        oldString = oldString[1..^1];
-                }
+                var newString = GetValue(propertyEntry.CurrentValue, propertyType, currentNull);
+                var oldString = GetValue(propertyEntry.OriginalValue, propertyType, originalNull);
 
                 var auditChange = new AuditChange(propertyName, oldString, newString);
                 memory.Span[++lastIndex] = auditChange;
             }
 
-            var array = memory[..(lastIndex + 1)].ToArray();
+            var array = memory[..(lastIndex + 1)];
             return (deleted, array);
+        }
+
+        private JsonElement? GetValue(object? value, Type propertyType, bool isNull)
+        {
+            if (isNull) 
+                return null;
+            
+            JsonElement? newString;
+            if (value is JsonDocument jsonDoc)
+            {
+                newString = jsonDoc.RootElement.Clone();
+            }
+            else
+            {
+                newString = JsonSerializer.SerializeToElement(value, propertyType, _options.JsonOptions);
+            }
+
+            return newString;
         }
     }
 }

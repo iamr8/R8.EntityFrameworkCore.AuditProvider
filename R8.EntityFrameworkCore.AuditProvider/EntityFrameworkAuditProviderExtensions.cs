@@ -11,15 +11,17 @@ namespace R8.EntityFrameworkCore.AuditProvider
         /// Registers <see cref="EntityFrameworkAuditProviderInterceptor"/> as a singleton service to audit changes in <see cref="DbContext"/>.
         /// </summary>
         /// <param name="services">A <see cref="IServiceCollection"/> to add services to.</param>
-        /// <param name="options">An <see cref="EntityFrameworkAuditProviderOptions"/> to configure audit provider.</param>
+        /// <param name="options">An <see cref="AuditProviderOptions"/> to configure audit provider.</param>
         /// <remarks>Don't forget to call <see cref="AddEntityFrameworkAuditProviderInterceptor"/> in your <see cref="DbContextOptionsBuilder"/>.</remarks>
-        public static IServiceCollection AddEntityFrameworkAuditProvider(this IServiceCollection services, Action<EntityFrameworkAuditProviderOptions>? options = null)
+        public static IServiceCollection AddEntityFrameworkAuditProvider(this IServiceCollection services, Action<AuditProviderOptions>? options = null)
         {
-            var opt = new EntityFrameworkAuditProviderOptions();
+            var opt = new AuditProviderOptions();
             options?.Invoke(opt);
-            services.TryAddSingleton<EntityFrameworkAuditProviderOptions>(_ =>
+            services.TryAddSingleton<AuditProviderOptions>(_ =>
             {
+#if DEBUG
                 AuditStatic.JsonStaticOptions = opt.JsonOptions;
+#endif
                 return opt;
             });
             services.TryAddSingleton<EntityFrameworkAuditProviderInterceptor>();

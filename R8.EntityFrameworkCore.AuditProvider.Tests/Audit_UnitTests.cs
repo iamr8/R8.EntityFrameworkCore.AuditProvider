@@ -1,11 +1,13 @@
 using System.Diagnostics;
 using System.Text.Json;
 using FluentAssertions;
+using FluentAssertions.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.Extensions.Logging;
 using R8.EntityFrameworkCore.AuditProvider.Abstractions;
 using R8.EntityFrameworkCore.AuditProvider.Tests.Entities;
+using R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests;
 using Xunit.Abstractions;
 
 namespace R8.EntityFrameworkCore.AuditProvider.Tests;
@@ -17,7 +19,7 @@ public class Audit_UnitTests
     public Audit_UnitTests(ITestOutputHelper outputHelper)
     {
         _outputHelper = outputHelper;
-        AuditStatic.JsonStaticOptions = new EntityFrameworkAuditProviderOptions().JsonOptions;
+        AuditStatic.JsonStaticOptions = new AuditProviderOptions().JsonOptions;
     }
 
     public class MockingAuditEntityEntry : IEntityEntry
@@ -45,14 +47,20 @@ public class Audit_UnitTests
         }
     }
 
+    private static DbContext CreateDbContext()
+    {
+        var dbContext = new PostgreSqlDbContextFactory().CreateDbContext(Array.Empty<string>());
+        return dbContext;
+    }
+
     [Theory]
     [InlineData(EntityState.Detached)]
     [InlineData(EntityState.Unchanged)]
     public async Task should_ignore_auditing_on_ignored_state(EntityState state)
     {
-        var dbContext = new DummyDbContextFactory().CreateDbContext(Array.Empty<string>());
+        var dbContext = CreateDbContext();
 
-        var options = new EntityFrameworkAuditProviderOptions();
+        var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
 
@@ -65,81 +73,40 @@ public class Audit_UnitTests
 
         success.Should().BeFalse();
 
-        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms");
+        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task should_find_changes_including_stacktrace(bool includeStackTrace)
+    [Fact]
+    public async Task should_not_store_creation_when_excluded()
     {
-        var dbContext = new DummyDbContextFactory().CreateDbContext(Array.Empty<string>());
+        var dbContext = CreateDbContext();
 
-        var options = new EntityFrameworkAuditProviderOptions
-        {
-            IncludeStackTrace = includeStackTrace,
-            UserProvider = sp => new EntityFrameworkAuditUser("1", new Dictionary<string, string>
-            {
-                { "Username", "Foo" }
-            })
-        };
-        options.ExcludedNamespacesInStackTrace.Add("Xunit");
-        options.ExcludedNamespacesInStackTrace.Add("JetBrains");
-
+        var options = new AuditProviderOptions();
+        options.IncludedFlags.Remove(AuditFlag.Created);
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
 
         var entity = new MyAuditableEntity { Name = "Foo" };
-        var members = new List<PropertyEntry> { dbContext.GetPropertyEntryWithNewValue(entity, x => x.Name, "Bar") };
-        var entry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
+        var members = new List<PropertyEntry> { dbContext.GetPropertyEntry(entity, x => x.Name) };
+        var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
 
         var stopWatch = Stopwatch.StartNew();
         var success = await interceptor.StoringAuditAsync(entry, dbContext);
         stopWatch.Stop();
 
-        success.Should().BeTrue();
+        success.Should().BeFalse();
 
-        entity.Audits.Should().NotBeNull();
-        entity.Audits.RootElement.ValueKind.Should().Be(JsonValueKind.Array);
+        entity.Audits.Should().BeNull();
 
-        var audits = entity.GetAudits();
-        audits.Should().NotBeNull();
-        audits.Should().ContainSingle();
-
-        var lastAudit = audits[0];
-        if (includeStackTrace)
-        {
-            lastAudit.StackTrace.Should().NotBeNullOrEmpty();
-        }
-        else
-        {
-            lastAudit.StackTrace.Should().BeNullOrEmpty();
-        }
-
-        lastAudit.Flag.Should().Be(AuditFlag.Changed);
-        lastAudit.Changes.Should().NotBeNullOrEmpty();
-        lastAudit.Changes.Should().ContainSingle();
-        lastAudit.User.HasValue.Should().BeTrue();
-        lastAudit.User.Value.UserId.Should().Be("1");
-        lastAudit.User.Value.AdditionalData.Should().NotBeNullOrEmpty();
-        lastAudit.User.Value.AdditionalData.Should().ContainKey("Username");
-        lastAudit.User.Value.AdditionalData["Username"].Should().Be("Foo");
-
-        var lastChange = lastAudit.Changes[0];
-        lastChange.Key.Should().Be(nameof(MyAuditableEntity.Name));
-        lastChange.OldValue.Should().Be("Foo");
-        lastChange.NewValue.Should().Be("Bar");
-
-        _outputHelper.WriteLine(entity.Audits.RootElement.GetRawText());
-        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms");
+        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
     }
 
     [Fact]
     public async Task should_store_creation()
     {
-        var dbContext = new DummyDbContextFactory().CreateDbContext(Array.Empty<string>());
+        var dbContext = CreateDbContext();
 
-        var options = new EntityFrameworkAuditProviderOptions();
+        var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
 
@@ -154,7 +121,7 @@ public class Audit_UnitTests
         success.Should().BeTrue();
 
         entity.Audits.Should().NotBeNull();
-        entity.Audits.RootElement.ValueKind.Should().Be(JsonValueKind.Array);
+        entity.Audits.Value.ValueKind.Should().Be(JsonValueKind.Array);
 
         var audits = entity.GetAudits();
         audits.Should().NotBeNull();
@@ -164,16 +131,16 @@ public class Audit_UnitTests
         lastAudit.Flag.Should().Be(AuditFlag.Created);
         lastAudit.Changes.Should().BeNullOrEmpty();
 
-        _outputHelper.WriteLine(entity.Audits.RootElement.GetRawText());
-        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms");
+        _outputHelper.WriteLine(entity.Audits.Value.GetRawText());
+        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
     }
 
     [Fact]
     public async Task should_store_deletion()
     {
-        var dbContext = new DummyDbContextFactory().CreateDbContext(Array.Empty<string>());
+        var dbContext = CreateDbContext();
 
-        var options = new EntityFrameworkAuditProviderOptions();
+        var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
 
@@ -192,7 +159,7 @@ public class Audit_UnitTests
         success.Should().BeTrue();
 
         entity.Audits.Should().NotBeNull();
-        entity.Audits.RootElement.ValueKind.Should().Be(JsonValueKind.Array);
+        entity.Audits.Value.ValueKind.Should().Be(JsonValueKind.Array);
 
         var audits = entity.GetAudits();
         audits.Should().NotBeNull();
@@ -202,16 +169,45 @@ public class Audit_UnitTests
         lastAudit.Flag.Should().Be(AuditFlag.Deleted);
         lastAudit.Changes.Should().BeNullOrEmpty();
 
-        _outputHelper.WriteLine(entity.Audits.RootElement.GetRawText());
-        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms");
+        _outputHelper.WriteLine(entity.Audits.Value.GetRawText());
+        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
+    }
+
+    [Fact]
+    public async Task should_not_store_deletion_when_excluded()
+    {
+        var dbContext = CreateDbContext();
+
+        var options = new AuditProviderOptions();
+        options.IncludedFlags.Remove(AuditFlag.Deleted);
+        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+
+        var entity = new MyAuditableEntity { Name = "Foo" };
+        var members = new List<PropertyEntry>
+        {
+            dbContext.GetPropertyEntry(entity, x => x.Name),
+            dbContext.GetPropertyEntryWithNewValue(entity, x => x.IsDeleted, true)
+        };
+        var entry = new MockingAuditEntityEntry(EntityState.Deleted, entity, members);
+
+        var stopWatch = Stopwatch.StartNew();
+        var success = await interceptor.StoringAuditAsync(entry, dbContext);
+        stopWatch.Stop();
+
+        success.Should().BeFalse();
+
+        entity.Audits.Should().BeNull();
+
+        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
     }
 
     [Fact]
     public async Task should_store_undeletion()
     {
-        var dbContext = new DummyDbContextFactory().CreateDbContext(Array.Empty<string>());
+        var dbContext = CreateDbContext();
 
-        var options = new EntityFrameworkAuditProviderOptions();
+        var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
 
@@ -230,7 +226,7 @@ public class Audit_UnitTests
         success.Should().BeTrue();
 
         entity.Audits.Should().NotBeNull();
-        entity.Audits.RootElement.ValueKind.Should().Be(JsonValueKind.Array);
+        entity.Audits.Value.ValueKind.Should().Be(JsonValueKind.Array);
 
         var audits = entity.GetAudits();
         audits.Should().NotBeNull();
@@ -240,16 +236,45 @@ public class Audit_UnitTests
         lastAudit.Flag.Should().Be(AuditFlag.UnDeleted);
         lastAudit.Changes.Should().BeNullOrEmpty();
 
-        _outputHelper.WriteLine(entity.Audits.RootElement.GetRawText());
-        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms");
+        _outputHelper.WriteLine(entity.Audits.Value.GetRawText());
+        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
+    }
+
+    [Fact]
+    public async Task should_not_store_undeletion_when_excluded()
+    {
+        var dbContext = CreateDbContext();
+
+        var options = new AuditProviderOptions();
+        options.IncludedFlags.Remove(AuditFlag.UnDeleted);
+        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+
+        var entity = new MyAuditableEntity { Name = "Foo", IsDeleted = true };
+        var members = new List<PropertyEntry>
+        {
+            dbContext.GetPropertyEntry(entity, x => x.Name),
+            dbContext.GetPropertyEntryWithNewValue(entity, x => x.IsDeleted, false)
+        };
+        var entry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
+
+        var stopWatch = Stopwatch.StartNew();
+        var success = await interceptor.StoringAuditAsync(entry, dbContext);
+        stopWatch.Stop();
+
+        success.Should().BeFalse();
+
+        entity.Audits.Should().BeNull();
+
+        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
     }
 
     [Fact]
     public async Task should_store_composite_creation_then_changed()
     {
-        var dbContext = new DummyDbContextFactory().CreateDbContext(Array.Empty<string>());
+        var dbContext = CreateDbContext();
 
-        var options = new EntityFrameworkAuditProviderOptions();
+        var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
 
@@ -277,19 +302,218 @@ public class Audit_UnitTests
         firstAudit.Flag.Should().Be(AuditFlag.Changed);
         firstAudit.Changes.Should().NotBeNullOrEmpty();
         firstAudit.Changes.Should().ContainSingle();
-        firstAudit.Changes[0].Key.Should().Be(nameof(MyAuditableEntity.Name));
-        firstAudit.Changes[0].OldValue.Should().Be("Foo");
-        firstAudit.Changes[0].NewValue.Should().Be("Bar");
+        firstAudit.Changes[0].Column.Should().Be(nameof(MyAuditableEntity.Name));
+        firstAudit.Changes[0].OldValue.Value.GetRawText().Should().Be("\"Foo\"");
+        firstAudit.Changes[0].NewValue.Value.GetRawText().Should().Be("\"Bar\"");
 
-        _outputHelper.WriteLine(entity.Audits.RootElement.GetRawText());
+        _outputHelper.WriteLine(entity.Audits.Value.GetRawText());
+    }
+
+    [Fact]
+    public void should_not_store_audits_more_than_provided_limit_when_has_created()
+    {
+        var options = new AuditProviderOptions
+        {
+            MaxStoredAudits = 10
+        };
+        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+
+        var mockingAudits = new Audit[]
+        {
+            new Audit { Flag = AuditFlag.Created, DateTime = DateTime.UtcNow.AddSeconds(-11) },
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow.AddSeconds(-10), Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } },
+            new Audit { Flag = AuditFlag.Deleted, DateTime = DateTime.UtcNow.AddSeconds(-9) },
+            new Audit { Flag = AuditFlag.UnDeleted, DateTime = DateTime.UtcNow.AddSeconds(-8) },
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow.AddSeconds(-7), Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } },
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow.AddSeconds(-6), Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } },
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow.AddSeconds(-5), Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } },
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow.AddSeconds(-4), Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } },
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow.AddSeconds(-3), Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } },
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow.AddSeconds(-2), Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } },
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow.AddSeconds(-1), Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } },
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow, Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } }
+        };
+        var entity = new MyAuditableEntity
+        {
+            Name = "Foo",
+            Audits = JsonSerializer.SerializeToElement(mockingAudits, AuditStatic.JsonStaticOptions)
+        };
+
+        var newAudit = new Audit
+        {
+            Flag = AuditFlag.Deleted,
+            DateTime = DateTime.UtcNow.AddSeconds(1)
+        };
+        var audits = interceptor.GetAudits(entity, newAudit);
+        audits.Should().NotBeNull();
+        audits.Should().HaveCount(options.MaxStoredAudits.Value);
+        audits[0].Flag.Should().Be(AuditFlag.Created);
+        audits[0].DateTime.Should().Be(mockingAudits[0].DateTime);
+
+        audits[1].Flag.Should().Be(mockingAudits[4].Flag);
+        audits[1].DateTime.Should().Be(mockingAudits[4].DateTime);
+
+        audits[^2].Flag.Should().Be(mockingAudits[^1].Flag);
+        audits[^2].DateTime.Should().Be(mockingAudits[^1].DateTime);
+
+        audits[^1].Flag.Should().Be(newAudit.Flag);
+        audits[^1].DateTime.Should().Be(newAudit.DateTime);
+    }
+
+    [Fact]
+    public void should_not_store_audits_more_than_provided_limit_when_hasnt_created()
+    {
+        var options = new AuditProviderOptions
+        {
+            MaxStoredAudits = 10
+        };
+        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+
+        var mockingAudits = new Audit[]
+        {
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow.AddSeconds(-10), Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } },
+            new Audit { Flag = AuditFlag.Deleted, DateTime = DateTime.UtcNow.AddSeconds(-9) },
+            new Audit { Flag = AuditFlag.UnDeleted, DateTime = DateTime.UtcNow.AddSeconds(-8) },
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow.AddSeconds(-7), Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } },
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow.AddSeconds(-6), Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } },
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow.AddSeconds(-5), Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } },
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow.AddSeconds(-4), Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } },
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow.AddSeconds(-3), Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } },
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow.AddSeconds(-2), Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } },
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow.AddSeconds(-1), Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } },
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow, Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } }
+        };
+        var entity = new MyAuditableEntity
+        {
+            Name = "Foo",
+            Audits = JsonSerializer.SerializeToElement(mockingAudits, AuditStatic.JsonStaticOptions)
+        };
+
+        var newAudit = new Audit
+        {
+            Flag = AuditFlag.Deleted,
+            DateTime = DateTime.UtcNow.AddSeconds(1)
+        };
+        var audits = interceptor.GetAudits(entity, newAudit);
+        audits.Should().NotBeNull();
+        audits.Should().HaveCount(options.MaxStoredAudits.Value);
+        audits[0].Flag.Should().Be(mockingAudits[2].Flag);
+        audits[0].DateTime.Should().Be(mockingAudits[2].DateTime);
+
+        audits[1].Flag.Should().Be(mockingAudits[3].Flag);
+        audits[1].DateTime.Should().Be(mockingAudits[3].DateTime);
+
+        audits[^2].Flag.Should().Be(mockingAudits[^1].Flag);
+        audits[^2].DateTime.Should().Be(mockingAudits[^1].DateTime);
+
+        audits[^1].Flag.Should().Be(newAudit.Flag);
+        audits[^1].DateTime.Should().Be(newAudit.DateTime);
+    }
+
+    [Fact]
+    public void should_not_store_audits_more_than_provided_limit_when_limit_equals_to_length()
+    {
+        var options = new AuditProviderOptions
+        {
+            MaxStoredAudits = 10
+        };
+        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+
+        var mockingAudits = new Audit[]
+        {
+            new Audit { Flag = AuditFlag.Deleted, DateTime = DateTime.UtcNow.AddSeconds(-9) },
+            new Audit { Flag = AuditFlag.UnDeleted, DateTime = DateTime.UtcNow.AddSeconds(-8) },
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow.AddSeconds(-7), Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } },
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow.AddSeconds(-6), Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } },
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow.AddSeconds(-5), Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } },
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow.AddSeconds(-4), Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } },
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow.AddSeconds(-3), Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } },
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow.AddSeconds(-2), Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } },
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow.AddSeconds(-1), Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } },
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow, Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } }
+        };
+        var entity = new MyAuditableEntity
+        {
+            Name = "Foo",
+            Audits = JsonSerializer.SerializeToElement(mockingAudits, AuditStatic.JsonStaticOptions)
+        };
+
+        var newAudit = new Audit
+        {
+            Flag = AuditFlag.Deleted,
+            DateTime = DateTime.UtcNow.AddSeconds(1)
+        };
+        var audits = interceptor.GetAudits(entity, newAudit);
+        audits.Should().NotBeNull();
+        audits.Should().HaveCount(options.MaxStoredAudits.Value);
+        audits[0].Flag.Should().Be(mockingAudits[1].Flag);
+        audits[0].DateTime.Should().Be(mockingAudits[1].DateTime);
+
+        audits[1].Flag.Should().Be(mockingAudits[2].Flag);
+        audits[1].DateTime.Should().Be(mockingAudits[2].DateTime);
+
+        audits[^2].Flag.Should().Be(mockingAudits[^1].Flag);
+        audits[^2].DateTime.Should().Be(mockingAudits[^1].DateTime);
+
+        audits[^1].Flag.Should().Be(newAudit.Flag);
+        audits[^1].DateTime.Should().Be(newAudit.DateTime);
+    }
+
+    [Fact]
+    public void should_store_audits_when_length_less_than_limit()
+    {
+        var options = new AuditProviderOptions
+        {
+            MaxStoredAudits = 10
+        };
+        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+
+        var mockingAudits = new Audit[]
+        {
+            new Audit { Flag = AuditFlag.Deleted, DateTime = DateTime.UtcNow.AddSeconds(-9) },
+            new Audit { Flag = AuditFlag.UnDeleted, DateTime = DateTime.UtcNow.AddSeconds(-8) },
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow.AddSeconds(-7), Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } },
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow.AddSeconds(-6), Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } },
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow.AddSeconds(-5), Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } },
+            new Audit { Flag = AuditFlag.Changed, DateTime = DateTime.UtcNow.AddSeconds(-4), Changes = new[] { new AuditChange { Column = "Foo", NewValue = JsonSerializer.Deserialize<JsonElement>("1"), OldValue = JsonSerializer.Deserialize<JsonElement>("1") } } },
+        };
+        var entity = new MyAuditableEntity
+        {
+            Name = "Foo",
+            Audits = JsonSerializer.SerializeToElement(mockingAudits, AuditStatic.JsonStaticOptions)
+        };
+
+        var newAudit = new Audit
+        {
+            Flag = AuditFlag.Deleted,
+            DateTime = DateTime.UtcNow.AddSeconds(1)
+        };
+        var audits = interceptor.GetAudits(entity, newAudit);
+        audits.Should().NotBeNull();
+        audits.Should().HaveCount(mockingAudits.Length + 1);
+        audits[0].Flag.Should().Be(mockingAudits[0].Flag);
+        audits[0].DateTime.Should().Be(mockingAudits[0].DateTime);
+
+        audits[1].Flag.Should().Be(mockingAudits[1].Flag);
+        audits[1].DateTime.Should().Be(mockingAudits[1].DateTime);
+
+        audits[^2].Flag.Should().Be(mockingAudits[^1].Flag);
+        audits[^2].DateTime.Should().Be(mockingAudits[^1].DateTime);
+
+        audits[^1].Flag.Should().Be(newAudit.Flag);
+        audits[^1].DateTime.Should().Be(newAudit.DateTime);
     }
 
     [Fact]
     public async Task should_throw_exception_when_using_modification_and_deletion_simultaneously()
     {
-        var dbContext = new DummyDbContextFactory().CreateDbContext(Array.Empty<string>());
+        var dbContext = CreateDbContext();
 
-        var options = new EntityFrameworkAuditProviderOptions();
+        var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
 
@@ -307,9 +531,9 @@ public class Audit_UnitTests
     [Fact]
     public async Task should_throw_exception_when_using_modification_and_undeletion_simultaneously()
     {
-        var dbContext = new DummyDbContextFactory().CreateDbContext(Array.Empty<string>());
+        var dbContext = CreateDbContext();
 
-        var options = new EntityFrameworkAuditProviderOptions();
+        var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
 
@@ -327,9 +551,9 @@ public class Audit_UnitTests
     [Fact]
     public async Task should_not_store_anything_when_not_changes_made()
     {
-        var dbContext = new DummyDbContextFactory().CreateDbContext(Array.Empty<string>());
+        var dbContext = CreateDbContext();
 
-        var options = new EntityFrameworkAuditProviderOptions();
+        var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
 
@@ -344,9 +568,9 @@ public class Audit_UnitTests
     [Fact]
     public async Task should_not_store_anything_when_not_changes_made2()
     {
-        var dbContext = new DummyDbContextFactory().CreateDbContext(Array.Empty<string>());
+        var dbContext = CreateDbContext();
 
-        var options = new EntityFrameworkAuditProviderOptions();
+        var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
 
@@ -357,13 +581,13 @@ public class Audit_UnitTests
         var success = await interceptor.StoringAuditAsync(modificationEntry, dbContext);
         success.Should().BeFalse();
     }
-    
+
     [Fact]
     public async Task should_not_store_properties_with_ignored_attribute()
     {
-        var dbContext = new DummyDbContextFactory().CreateDbContext(Array.Empty<string>());
+        var dbContext = CreateDbContext();
 
-        var options = new EntityFrameworkAuditProviderOptions();
+        var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
 
@@ -378,9 +602,9 @@ public class Audit_UnitTests
     [Fact]
     public async Task should_store_properties_without_ignored_attribute()
     {
-        var dbContext = new DummyDbContextFactory().CreateDbContext(Array.Empty<string>());
+        var dbContext = CreateDbContext();
 
-        var options = new EntityFrameworkAuditProviderOptions();
+        var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
 
@@ -405,20 +629,20 @@ public class Audit_UnitTests
         firstAudit.Flag.Should().Be(AuditFlag.Changed);
         firstAudit.Changes.Should().NotBeNullOrEmpty();
         firstAudit.Changes.Should().ContainSingle();
-        firstAudit.Changes[0].Key.Should().Be(nameof(MyAuditableEntity.Name));
-        firstAudit.Changes[0].OldValue.Should().Be("Foo");
-        firstAudit.Changes[0].NewValue.Should().Be("Bar");
+        firstAudit.Changes[0].Column.Should().Be(nameof(MyAuditableEntity.Name));
+        firstAudit.Changes[0].OldValue.Value.GetRawText().Should().Be("\"Foo\"");
+        firstAudit.Changes[0].NewValue.Value.GetRawText().Should().Be("\"Bar\"");
 
-        _outputHelper.WriteLine(entity.Audits.RootElement.GetRawText());
-        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms");
+        _outputHelper.WriteLine(entity.Audits.Value.GetRawText());
+        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
     }
 
     [Fact]
     public async Task should_delete_permanently_when_entity_is_not_auditable_on_deletion()
     {
-        var dbContext = new DummyDbContextFactory().CreateDbContext(Array.Empty<string>());
+        var dbContext = CreateDbContext();
 
-        var options = new EntityFrameworkAuditProviderOptions();
+        var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
 
@@ -431,15 +655,15 @@ public class Audit_UnitTests
         stopWatch.Stop();
         success.Should().BeFalse();
 
-        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms");
+        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
     }
 
     [Fact]
     public async Task should_not_store_audit_changes_when_entity_is_not_auditable_on_deletion()
     {
-        var dbContext = new DummyDbContextFactory().CreateDbContext(Array.Empty<string>());
+        var dbContext = CreateDbContext();
 
-        var options = new EntityFrameworkAuditProviderOptions();
+        var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
 
@@ -452,15 +676,15 @@ public class Audit_UnitTests
         stopWatch.Stop();
         success.Should().BeFalse();
 
-        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms");
+        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
     }
 
     [Fact]
     public async Task should_store_composite_changed_then_changed_again()
     {
-        var dbContext = new DummyDbContextFactory().CreateDbContext(Array.Empty<string>());
+        var dbContext = CreateDbContext();
 
-        var options = new EntityFrameworkAuditProviderOptions();
+        var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
 
@@ -484,27 +708,27 @@ public class Audit_UnitTests
         lastAudit.Flag.Should().Be(AuditFlag.Changed);
         lastAudit.Changes.Should().NotBeNullOrEmpty();
         lastAudit.Changes.Should().ContainSingle();
-        lastAudit.Changes[0].Key.Should().Be(nameof(MyAuditableEntity.Name));
-        lastAudit.Changes[0].OldValue.Should().Be("Foo");
-        lastAudit.Changes[0].NewValue.Should().Be("Bar");
+        lastAudit.Changes[0].Column.Should().Be(nameof(MyAuditableEntity.Name));
+        lastAudit.Changes[0].OldValue.Value.GetRawText().Should().Be("\"Foo\"");
+        lastAudit.Changes[0].NewValue.Value.GetRawText().Should().Be("\"Bar\"");
 
         var firstAudit = audits[1];
         firstAudit.Flag.Should().Be(AuditFlag.Changed);
         firstAudit.Changes.Should().NotBeNullOrEmpty();
         firstAudit.Changes.Should().ContainSingle();
-        firstAudit.Changes[0].Key.Should().Be(nameof(MyAuditableEntity.Name));
-        firstAudit.Changes[0].OldValue.Should().Be("Bar");
-        firstAudit.Changes[0].NewValue.Should().Be("Foo");
+        firstAudit.Changes[0].Column.Should().Be(nameof(MyAuditableEntity.Name));
+        firstAudit.Changes[0].OldValue.Value.GetRawText().Should().Be("\"Bar\"");
+        firstAudit.Changes[0].NewValue.Value.GetRawText().Should().Be("\"Foo\"");
 
-        _outputHelper.WriteLine(entity.Audits.RootElement.GetRawText());
+        _outputHelper.WriteLine(entity.Audits.Value.GetRawText());
     }
 
     [Fact]
     public async Task should_store_changes_of_unknown_types_by_interceptor()
     {
-        var dbContext = new DummyDbContextFactory().CreateDbContext(Array.Empty<string>());
+        var dbContext = CreateDbContext();
 
-        var options = new EntityFrameworkAuditProviderOptions();
+        var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
 
@@ -525,20 +749,20 @@ public class Audit_UnitTests
         lastAudit.Flag.Should().Be(AuditFlag.Changed);
         lastAudit.Changes.Should().NotBeNullOrEmpty();
         lastAudit.Changes.Should().ContainSingle();
-        lastAudit.Changes[0].Key.Should().Be(nameof(MyAuditableEntity.Payload));
-        lastAudit.Changes[0].OldValue.Should().Be(@"[{""name"":""arash""}]");
-        lastAudit.Changes[0].NewValue.Should().Be(@"[{""name"":""abood""}]");
+        lastAudit.Changes[0].Column.Should().Be(nameof(MyAuditableEntity.Payload));
+        lastAudit.Changes[0].OldValue.Value.GetRawText().Should().Be(@"[{""name"":""arash""}]");
+        lastAudit.Changes[0].NewValue.Value.GetRawText().Should().Be(@"[{""name"":""abood""}]");
 
-        _outputHelper.WriteLine(entity.Audits.RootElement.GetRawText());
-        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms");
+        _outputHelper.WriteLine(entity.Audits.Value.GetRawText());
+        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
     }
 
     [Fact]
     public async Task should_store_changes_of_datetime_types()
     {
-        var dbContext = new DummyDbContextFactory().CreateDbContext(Array.Empty<string>());
+        var dbContext = CreateDbContext();
 
-        var options = new EntityFrameworkAuditProviderOptions();
+        var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
 
@@ -570,36 +794,36 @@ public class Audit_UnitTests
         for (var i = 0; i < audit.Changes!.Length; i++)
         {
             var change = audit.Changes[i];
-            change.Key.Should().Be(i switch
+            change.Column.Should().Be(i switch
             {
                 0 => nameof(MyAuditableEntity.Date),
                 1 => nameof(MyAuditableEntity.DateOffset),
                 _ => throw new ArgumentOutOfRangeException()
             });
-            change.OldValue.Should().Be(i switch
+            change.OldValue.Value.GetRawText().Should().Be(i switch
             {
-                0 => @"2021-01-01T01:01:01Z",
-                1 => @"2021-01-01T01:01:01+03:00",
+                0 => "\"2021-01-01T01:01:01Z\"",
+                1 => "\"2021-01-01T01:01:01+03:00\"",
                 _ => throw new ArgumentOutOfRangeException()
             });
-            change.NewValue.Should().Be(i switch
+            change.NewValue.Value.GetRawText().Should().Be(i switch
             {
-                0 => @"2022-01-01T01:01:01Z",
-                1 => @"2022-01-01T01:01:01+03:00",
+                0 => "\"2022-01-01T01:01:01Z\"",
+                1 => "\"2022-01-01T01:01:01+03:00\"",
                 _ => throw new ArgumentOutOfRangeException()
             });
         }
 
-        _outputHelper.WriteLine(entity.Audits.RootElement.GetRawText());
-        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms");
+        _outputHelper.WriteLine(entity.Audits.Value.GetRawText());
+        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
     }
-    
+
     [Fact]
     public async Task should_store_changes_when_set_to_null_types()
     {
-        var dbContext = new DummyDbContextFactory().CreateDbContext(Array.Empty<string>());
+        var dbContext = CreateDbContext();
 
-        var options = new EntityFrameworkAuditProviderOptions();
+        var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
 
@@ -621,20 +845,20 @@ public class Audit_UnitTests
         audit.Changes.Should().NotBeNullOrEmpty();
         audit.Changes.Should().ContainSingle();
         var change = audit.Changes![0];
-        change.Key.Should().Be(nameof(MyAuditableEntity.NullableInt));
-        change.OldValue.Should().Be("3");
-        change.NewValue.Should().BeNull();
+        change.Column.Should().Be(nameof(MyAuditableEntity.NullableInt));
+        change.OldValue.Value.GetRawText().Should().Be("3");
+        change.NewValue.HasValue.Should().BeFalse();
 
-        _outputHelper.WriteLine(entity.Audits.RootElement.GetRawText());
-        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms");
+        _outputHelper.WriteLine(entity.Audits.Value.GetRawText());
+        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
     }
-    
+
     [Fact]
     public async Task should_store_changes_when_set_from_null_types()
     {
-        var dbContext = new DummyDbContextFactory().CreateDbContext(Array.Empty<string>());
+        var dbContext = CreateDbContext();
 
-        var options = new EntityFrameworkAuditProviderOptions();
+        var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
 
@@ -656,20 +880,20 @@ public class Audit_UnitTests
         audit.Changes.Should().NotBeNullOrEmpty();
         audit.Changes.Should().ContainSingle();
         var change = audit.Changes![0];
-        change.Key.Should().Be(nameof(MyAuditableEntity.NullableInt));
-        change.OldValue.Should().BeNull();
-        change.NewValue.Should().Be("3");
+        change.Column.Should().Be(nameof(MyAuditableEntity.NullableInt));
+        change.OldValue.HasValue.Should().BeFalse();
+        change.NewValue.Value.GetRawText().Should().Be("3");
 
-        _outputHelper.WriteLine(entity.Audits.RootElement.GetRawText());
-        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms");
+        _outputHelper.WriteLine(entity.Audits.Value.GetRawText());
+        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
     }
-    
+
     [Fact]
     public async Task should_store_changes_of_list_types()
     {
-        var dbContext = new DummyDbContextFactory().CreateDbContext(Array.Empty<string>());
+        var dbContext = CreateDbContext();
 
-        var options = new EntityFrameworkAuditProviderOptions();
+        var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
 
@@ -703,21 +927,21 @@ public class Audit_UnitTests
         for (var i = 0; i < audit.Changes!.Length; i++)
         {
             var change = audit.Changes[i];
-            change.Key.Should().Be(i switch
+            change.Column.Should().Be(i switch
             {
                 0 => nameof(MyAuditableEntity.ListOfStrings),
                 1 => nameof(MyAuditableEntity.ArrayOfDoubles),
                 2 => nameof(MyAuditableEntity.ListOfIntegers),
                 _ => throw new ArgumentOutOfRangeException()
             });
-            change.OldValue.Should().Be(i switch
+            change.OldValue.Value.GetRawText().Should().Be(i switch
             {
                 0 => @"[""Foo"",""Bar""]",
                 1 => @"[1.1,2.2]",
                 2 => @"[1,2]",
                 _ => throw new ArgumentOutOfRangeException()
             });
-            change.NewValue.Should().Be(i switch
+            change.NewValue.Value.GetRawText().Should().Be(i switch
             {
                 0 => @"[""Foo"",""Bar"",""Baz""]",
                 1 => @"[1.1,2.2,3.3]",
@@ -726,16 +950,50 @@ public class Audit_UnitTests
             });
         }
 
-        _outputHelper.WriteLine(entity.Audits.RootElement.GetRawText());
-        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms");
+        _outputHelper.WriteLine(entity.Audits.Value.GetRawText());
+        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
     }
-    
+
+    [Fact]
+    public async Task should_not_store_changes_when_excluded()
+    {
+        var dbContext = CreateDbContext();
+
+        var options = new AuditProviderOptions();
+        options.IncludedFlags.Remove(AuditFlag.Changed);
+        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+
+        var entity = new MyAuditableEntity
+        {
+            ListOfStrings = new List<string> { "Foo", "Bar" },
+            ArrayOfDoubles = new[] { 1.1, 2.2 },
+            ListOfIntegers = new List<int> { 1, 2 }
+        };
+
+        var creationMembers = new List<PropertyEntry>
+        {
+            dbContext.GetPropertyEntryWithNewValue(entity, x => x.ListOfStrings, new List<string> { "Foo", "Bar", "Baz" }),
+            dbContext.GetPropertyEntryWithNewValue(entity, x => x.ArrayOfDoubles, new[] { 1.1, 2.2, 3.3 }),
+            dbContext.GetPropertyEntryWithNewValue(entity, x => x.ListOfIntegers, new List<int> { 1, 2, 3 })
+        };
+        var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, creationMembers);
+        var stopWatch = Stopwatch.StartNew();
+        var success = await interceptor.StoringAuditAsync(creationEntry, dbContext);
+        stopWatch.Stop();
+        success.Should().BeFalse();
+
+        entity.Audits.Should().BeNull();
+
+        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
+    }
+
     [Fact]
     public async Task should_store_changes_of_list_types_with_empty_values()
     {
-        var dbContext = new DummyDbContextFactory().CreateDbContext(Array.Empty<string>());
+        var dbContext = CreateDbContext();
 
-        var options = new EntityFrameworkAuditProviderOptions();
+        var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
 
@@ -758,15 +1016,15 @@ public class Audit_UnitTests
         stopWatch.Stop();
         success.Should().BeFalse();
 
-        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms");
+        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
     }
-    
+
     [Fact]
     public async Task should_store_changes_of_list_types_with_null_values()
     {
-        var dbContext = new DummyDbContextFactory().CreateDbContext(Array.Empty<string>());
+        var dbContext = CreateDbContext();
 
-        var options = new EntityFrameworkAuditProviderOptions();
+        var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
 
@@ -796,12 +1054,56 @@ public class Audit_UnitTests
         for (var i = 0; i < audit.Changes!.Length; i++)
         {
             var change = audit.Changes[0];
-            change.Key.Should().Be(nameof(MyAuditableEntity.NullableListOfLongs));
-            change.OldValue.Should().BeNull();
-            change.NewValue.Should().Be(("[1,2,3]"));
+            change.Column.Should().Be(nameof(MyAuditableEntity.NullableListOfLongs));
+            change.OldValue.HasValue.Should().BeFalse();
+            change.NewValue.Value.GetRawText().Should().Be("[1,2,3]");
         }
 
-        _outputHelper.WriteLine(entity.Audits.RootElement.GetRawText());
-        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms");
+        _outputHelper.WriteLine(entity.Audits.Value.GetRawText());
+        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
+    }
+
+    [Fact]
+    public async Task should_store_changes_of_double_type()
+    {
+        var dbContext = CreateDbContext();
+
+        var options = new AuditProviderOptions();
+        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+
+        var entity = new MyAuditableEntity
+        {
+            Double = 0
+        };
+
+        var creationMembers = new List<PropertyEntry>
+        {
+            dbContext.GetPropertyEntryWithNewValue(entity, x => x.Double, 5)
+        };
+        var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, creationMembers);
+        var stopWatch = Stopwatch.StartNew();
+        var success = await interceptor.StoringAuditAsync(creationEntry, dbContext);
+        stopWatch.Stop();
+        success.Should().BeTrue();
+
+        var audits = entity.GetAudits();
+        audits.Should().NotBeNull();
+        audits.Should().ContainSingle();
+
+        var audit = audits[0];
+        audit.Flag.Should().Be(AuditFlag.Changed);
+        audit.Changes.Should().NotBeNullOrEmpty();
+        audit.Changes.Should().HaveCount(1);
+        for (var i = 0; i < audit.Changes!.Length; i++)
+        {
+            var change = audit.Changes[0];
+            change.Column.Should().Be(nameof(MyAuditableEntity.Double));
+            change.OldValue.Value.GetRawText().Should().Be("0");
+            change.NewValue.Value.GetRawText().Should().Be("5");
+        }
+
+        _outputHelper.WriteLine(entity.Audits.Value.GetRawText());
+        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
     }
 }
