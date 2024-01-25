@@ -176,6 +176,13 @@ namespace R8.EntityFrameworkCore.AuditProvider
                     var startIndex = 0;
                     if (existingAudits.Span[0].Flag == AuditFlag.Created)
                     {
+                        if (_options.MaxStoredAudits is 1)
+                        {
+                            // In this scenario, we have only one audit and it is created.
+                            // So we cannot add new audit to the list.
+                            throw new InvalidOperationException("Max stored audits cannot be 1 when the first audit has Created flag.");
+                        }
+                        
                         startIndex = 1;
                         newAudits.Span[0] = existingAudits.Span[0];
                     }

@@ -507,6 +507,36 @@ public class Audit_UnitTests
         audits[^1].Flag.Should().Be(newAudit.Flag);
         audits[^1].DateTime.Should().Be(newAudit.DateTime);
     }
+    
+    [Fact]
+    public void should_throw_exception_when_limit_equals_to_one_and_created_included()
+    {
+        var options = new AuditProviderOptions
+        {
+            MaxStoredAudits = 1
+        };
+        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+
+        var mockingAudits = new Audit[]
+        {
+            new Audit { Flag = AuditFlag.Created, DateTime = DateTime.UtcNow.AddSeconds(-9) },
+        };
+        var entity = new MyAuditableEntity
+        {
+            Name = "Foo",
+            Audits = JsonSerializer.SerializeToElement(mockingAudits, AuditStatic.JsonStaticOptions)
+        };
+
+        var newAudit = new Audit
+        {
+            Flag = AuditFlag.Deleted,
+            DateTime = DateTime.UtcNow.AddSeconds(1)
+        };
+
+        var action = () => interceptor.GetAudits(entity, newAudit);
+        action.Should().ThrowExactly<InvalidOperationException>();
+    }
 
     [Fact]
     public async Task should_throw_exception_when_using_modification_and_deletion_simultaneously()
