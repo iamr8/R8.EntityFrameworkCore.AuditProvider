@@ -196,6 +196,44 @@ public class Audit_UnitTests
     }
     
     [Fact]
+    public async Task should_store_maintainer_audit_user_without_additional_user_data()
+    {
+        var dbContext = CreateDbContext();
+
+        var auditUser = new AuditProviderUser("1");
+        var options = new AuditProviderOptions { UserProvider = sp => auditUser };
+        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+
+        var entity = new MyAuditableEntity { Name = "Foo" };
+        var members = new List<PropertyEntry> { dbContext.GetPropertyEntry(entity, x => x.Name) };
+        var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
+
+        var stopWatch = Stopwatch.StartNew();
+        var success = await interceptor.StoringAuditAsync(entry, dbContext);
+        stopWatch.Stop();
+
+        success.Should().BeTrue();
+
+        entity.Audits.Should().NotBeNull();
+        entity.Audits.Value.ValueKind.Should().Be(JsonValueKind.Array);
+
+        var audits = entity.GetAudits();
+        audits.Should().NotBeNull();
+        audits.Should().ContainSingle();
+
+        var lastAudit = audits[0];
+        lastAudit.Flag.Should().Be(AuditFlag.Created);
+        lastAudit.Changes.Should().BeNullOrEmpty();
+        lastAudit.User.HasValue.Should().BeTrue();
+        lastAudit.User.Value.UserId.Should().Be(auditUser.UserId);
+        lastAudit.User.Value.AdditionalData.Should().BeNull();
+
+        _outputHelper.WriteLine(entity.Audits.Value.GetRawText());
+        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
+    }
+    
+    [Fact]
     public async Task should_store_deletion()
     {
         var dbContext = CreateDbContext();

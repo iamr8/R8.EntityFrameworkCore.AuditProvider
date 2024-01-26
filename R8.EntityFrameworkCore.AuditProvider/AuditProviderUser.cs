@@ -5,7 +5,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
     /// </summary>
     public class AuditProviderUser
     {
-        public AuditProviderUser(string userId, IDictionary<string, string> additionalData)
+        public AuditProviderUser(string userId, IDictionary<string, string>? additionalData = null)
         {
             UserId = userId;
             AdditionalData = additionalData;
@@ -19,6 +19,6 @@ namespace R8.EntityFrameworkCore.AuditProvider
         /// <summary>
         /// Gets or sets a <see cref="Dictionary{TKey,TValue}"/> that represents additional data.
         /// </summary>
-        public IDictionary<string, string> AdditionalData { get; set; }
+        public IDictionary<string, string>? AdditionalData { get; set; }
     }
 }
