@@ -1,11 +1,11 @@
 ﻿using System.Collections;
+using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Logging;
 
 using R8.EntityFrameworkCore.AuditProvider.Abstractions;
@@ -18,12 +18,15 @@ namespace R8.EntityFrameworkCore.AuditProvider
     public class EntityFrameworkAuditProviderInterceptor : SaveChangesInterceptor
     {
         private readonly AuditProviderOptions _options;
+        private readonly IServiceProvider _serviceProvider;
+        
         private readonly ILogger<EntityFrameworkAuditProviderInterceptor> _logger;
 
-        public EntityFrameworkAuditProviderInterceptor(AuditProviderOptions options, ILogger<EntityFrameworkAuditProviderInterceptor> logger)
+        public EntityFrameworkAuditProviderInterceptor(AuditProviderOptions options, IServiceProvider serviceProvider, ILogger<EntityFrameworkAuditProviderInterceptor> logger)
         {
             _options = options;
             _logger = logger;
+            _serviceProvider = serviceProvider;
         }
 
         public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
@@ -43,6 +46,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
             return await base.SavingChangesAsync(eventData, result, cancellationToken).ConfigureAwait(false);
         }
 
+        [DebuggerStepThrough]
         internal async ValueTask<bool> StoringAuditAsync(IEntityEntry entry, DbContext? dbContext, CancellationToken cancellationToken = default)
         {
             if (entry.State is not (EntityState.Added or EntityState.Deleted or EntityState.Modified))
@@ -89,12 +93,15 @@ namespace R8.EntityFrameworkCore.AuditProvider
 
             if (dbContext != null && _options.UserProvider != null)
             {
-                var user = _options.UserProvider.Invoke(dbContext.GetService<IServiceProvider>());
-                audit.User = new AuditUser
+                var user = _options.UserProvider.Invoke(_serviceProvider);
+                if (user != null)
                 {
-                    UserId = user.UserId,
-                    AdditionalData = user.AdditionalData,
-                };
+                    audit.User = new AuditUser
+                    {
+                        UserId = user.UserId,
+                        AdditionalData = user.AdditionalData,
+                    };
+                }
             }
 
             switch (entry.State)
@@ -210,9 +217,9 @@ namespace R8.EntityFrameworkCore.AuditProvider
             return newAudits.ToArray();
         }
 
-        private (bool? Deleted, Memory<AuditChange> Changed) GetChangedPropertyEntries(ICollection<PropertyEntry> propertyEntries)
+        private (bool? Deleted, Memory<AuditChange> Changed) GetChangedPropertyEntries(PropertyEntry[] propertyEntries)
         {
-            Memory<AuditChange> memory = new AuditChange[propertyEntries.Count];
+            Memory<AuditChange> memory = new AuditChange[propertyEntries.Length];
             var lastIndex = -1;
             bool? deleted = null;
             foreach (var propertyEntry in propertyEntries)
@@ -222,6 +229,9 @@ namespace R8.EntityFrameworkCore.AuditProvider
                     continue;
 
                 var propertyName = propertyEntry.Metadata.Name;
+                if (propertyName.Equals(nameof(IAuditable.Audits), StringComparison.Ordinal))
+                    continue;
+                
                 var currentNull = propertyEntry.CurrentValue is null;
                 var originalNull = propertyEntry.OriginalValue is null;
                 if ((currentNull && originalNull) || propertyEntry.CurrentValue?.Equals(propertyEntry.OriginalValue) == true)

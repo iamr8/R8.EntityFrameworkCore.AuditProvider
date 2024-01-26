@@ -9,8 +9,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Entities
     {
         public bool IsDeleted { get; set; }
 
-        [Column(nameof(Audits), TypeName = "nvarchar(max)")]
-        [IgnoreAudit]
+        [Column(nameof(Audits), TypeName = "nvarchar(max)"), IgnoreAudit]
         public string? AuditsJson { get; set; }
 
         [NotMapped]
@@ -21,7 +20,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Entities
                 if (string.IsNullOrWhiteSpace(AuditsJson))
                     return null;
                 
-                var json = JsonSerializer.Deserialize<JsonElement>(AuditsJson, AuditStatic.JsonStaticOptions);
+                var json = JsonSerializer.Deserialize<JsonElement>(AuditsJson, AuditProviderConfiguration.JsonOptions);
                 return json;
             }
             
@@ -35,20 +34,6 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Entities
 
                 AuditsJson = value.Value.GetRawText();
             }
-        }
-
-        /// <summary>
-        /// Returns an array of <see cref="Audit"/> that represents audits.
-        /// </summary>
-        /// <returns>An array of <see cref="Audit"/> instances deserialized from <see cref="Audits"/>.</returns>
-        /// <exception cref="NullReferenceException">Thrown when <see cref="Audits"/> is null.</exception>
-        public Audit[] GetAudits()
-        {
-            if (Audits == null)
-                throw new NullReferenceException(nameof(Audits));
-
-            var audits = this.Audits.Value.Deserialize<Audit[]>(AuditStatic.JsonStaticOptions);
-            return audits!;
         }
     }
 }

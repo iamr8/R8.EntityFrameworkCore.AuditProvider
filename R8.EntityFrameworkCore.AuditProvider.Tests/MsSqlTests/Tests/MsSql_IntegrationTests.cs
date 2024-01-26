@@ -42,7 +42,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Tests
             await MsSqlDbContext.SaveChangesAsync();
 
             // Arrange
-            var audits = entity.GetAudits();
+            var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
             audits.Should().NotBeEmpty();
             audits.Should().HaveCount(2);
 
@@ -76,7 +76,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Tests
             await MsSqlDbContext.SaveChangesAsync();
 
             // Arrange
-            var audits = entity.GetAudits();
+            var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
             audits.Should().NotBeEmpty();
 
             audits.Should().HaveCount(2);
@@ -126,7 +126,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Tests
             await MsSqlDbContext.SaveChangesAsync();
 
             // Arrange
-            var audits = entity.GetAudits();
+            var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
             Assert.NotEmpty(audits);
 
             audits.Should().HaveCount(2);
@@ -159,7 +159,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Tests
             await MsSqlDbContext.SaveChangesAsync();
 
             // Arrange
-            var audits = entity.GetAudits();
+            var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
             Assert.NotEmpty(audits);
 
             audits.Should().HaveCount(2);
@@ -193,7 +193,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Tests
             await MsSqlDbContext.SaveChangesAsync();
 
             // Arrange
-            var audits = entity.GetAudits();
+            var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
             audits.Should().NotBeEmpty();
 
             audits.Should().HaveCount(2);
@@ -224,7 +224,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Tests
             await MsSqlDbContext.SaveChangesAsync();
 
             // Arrange
-            var audits = entity.GetAudits();
+            var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
             audits.Should().NotBeEmpty();
 
             audits.Should().HaveCount(2);
@@ -296,7 +296,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Tests
             // Arrange
             entity.Should().NotBeNull();
 
-            var audits = entity.GetAudits();
+            var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
             audits.Should().NotBeEmpty();
             audits.Should().HaveCount(4);
 
@@ -328,7 +328,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Tests
             // Arrange
             entity.Should().NotBeNull();
 
-            var audits = entity.GetAudits();
+            var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
             audits.Should().NotBeEmpty();
 
             audits.Should().HaveCount(2);
@@ -350,7 +350,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Tests
 
             await MsSqlDbContext.SaveChangesAsync();
 
-            var audits = entity.GetAudits();
+            var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
             Assert.NotEmpty(audits);
 
             var lastAudit = audits.MaxBy(x => x.DateTime);

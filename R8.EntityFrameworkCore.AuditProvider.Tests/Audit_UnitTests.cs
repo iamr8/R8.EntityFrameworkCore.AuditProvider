@@ -8,6 +8,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.Extensions.Logging;
 
+using NSubstitute;
+
 using R8.EntityFrameworkCore.AuditProvider.Abstractions;
 using R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests;
 using R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.Entities;
@@ -23,7 +25,7 @@ public class Audit_UnitTests
     public Audit_UnitTests(ITestOutputHelper outputHelper)
     {
         _outputHelper = outputHelper;
-        AuditStatic.JsonStaticOptions = new AuditProviderOptions().JsonOptions;
+        AuditProviderConfiguration.JsonOptions = new AuditProviderOptions().JsonOptions;
     }
 
     public class MockingAuditEntityEntry : IEntityEntry
@@ -57,6 +59,11 @@ public class Audit_UnitTests
         return dbContext;
     }
 
+    private static IServiceProvider CreateServiceProvider()
+    {
+        return Substitute.For<IServiceProvider>();
+    }
+    
     [Theory]
     [InlineData(EntityState.Detached)]
     [InlineData(EntityState.Unchanged)]
@@ -66,7 +73,7 @@ public class Audit_UnitTests
 
         var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity();
         var entry = new MockingAuditEntityEntry(state, entity, Array.Empty<PropertyEntry>());
@@ -88,7 +95,7 @@ public class Audit_UnitTests
         var options = new AuditProviderOptions();
         options.IncludedFlags.Remove(AuditFlag.Created);
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo" };
         var members = new List<PropertyEntry> { dbContext.GetPropertyEntry(entity, x => x.Name) };
@@ -112,7 +119,7 @@ public class Audit_UnitTests
 
         var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo" };
         var members = new List<PropertyEntry> { dbContext.GetPropertyEntry(entity, x => x.Name) };
@@ -127,7 +134,7 @@ public class Audit_UnitTests
         entity.Audits.Should().NotBeNull();
         entity.Audits.Value.ValueKind.Should().Be(JsonValueKind.Array);
 
-        var audits = entity.GetAudits();
+        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
         audits.Should().NotBeNull();
         audits.Should().ContainSingle();
 
@@ -154,7 +161,7 @@ public class Audit_UnitTests
         });
         var options = new AuditProviderOptions { UserProvider = sp => auditUser };
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo" };
         var members = new List<PropertyEntry> { dbContext.GetPropertyEntry(entity, x => x.Name) };
@@ -169,7 +176,7 @@ public class Audit_UnitTests
         entity.Audits.Should().NotBeNull();
         entity.Audits.Value.ValueKind.Should().Be(JsonValueKind.Array);
 
-        var audits = entity.GetAudits();
+        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
         audits.Should().NotBeNull();
         audits.Should().ContainSingle();
 
@@ -203,7 +210,7 @@ public class Audit_UnitTests
         var auditUser = new AuditProviderUser("1");
         var options = new AuditProviderOptions { UserProvider = sp => auditUser };
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo" };
         var members = new List<PropertyEntry> { dbContext.GetPropertyEntry(entity, x => x.Name) };
@@ -218,7 +225,7 @@ public class Audit_UnitTests
         entity.Audits.Should().NotBeNull();
         entity.Audits.Value.ValueKind.Should().Be(JsonValueKind.Array);
 
-        var audits = entity.GetAudits();
+        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
         audits.Should().NotBeNull();
         audits.Should().ContainSingle();
 
@@ -240,7 +247,7 @@ public class Audit_UnitTests
 
         var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo" };
         var members = new List<PropertyEntry>
@@ -259,7 +266,7 @@ public class Audit_UnitTests
         entity.Audits.Should().NotBeNull();
         entity.Audits.Value.ValueKind.Should().Be(JsonValueKind.Array);
 
-        var audits = entity.GetAudits();
+        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
         audits.Should().NotBeNull();
         audits.Should().ContainSingle();
 
@@ -279,7 +286,7 @@ public class Audit_UnitTests
         var options = new AuditProviderOptions();
         options.IncludedFlags.Remove(AuditFlag.Deleted);
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo" };
         var members = new List<PropertyEntry>
@@ -307,7 +314,7 @@ public class Audit_UnitTests
 
         var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo", IsDeleted = true };
         var members = new List<PropertyEntry>
@@ -326,7 +333,7 @@ public class Audit_UnitTests
         entity.Audits.Should().NotBeNull();
         entity.Audits.Value.ValueKind.Should().Be(JsonValueKind.Array);
 
-        var audits = entity.GetAudits();
+        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
         audits.Should().NotBeNull();
         audits.Should().ContainSingle();
 
@@ -346,7 +353,7 @@ public class Audit_UnitTests
         var options = new AuditProviderOptions();
         options.IncludedFlags.Remove(AuditFlag.UnDeleted);
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo", IsDeleted = true };
         var members = new List<PropertyEntry>
@@ -374,7 +381,7 @@ public class Audit_UnitTests
 
         var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo" };
 
@@ -388,7 +395,7 @@ public class Audit_UnitTests
         success = await interceptor.StoringAuditAsync(modificationEntry, dbContext);
         success.Should().BeTrue();
 
-        var audits = entity.GetAudits();
+        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
         audits.Should().NotBeNull();
         audits.Should().HaveCount(2);
 
@@ -415,7 +422,7 @@ public class Audit_UnitTests
             MaxStoredAudits = 10
         };
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var mockingAudits = new Audit[]
         {
@@ -435,7 +442,7 @@ public class Audit_UnitTests
         var entity = new MyAuditableEntity
         {
             Name = "Foo",
-            Audits = JsonSerializer.SerializeToElement(mockingAudits, AuditStatic.JsonStaticOptions)
+            Audits = JsonSerializer.SerializeToElement(mockingAudits, AuditProviderConfiguration.JsonOptions)
         };
 
         var newAudit = new Audit
@@ -467,7 +474,7 @@ public class Audit_UnitTests
             MaxStoredAudits = 10
         };
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var mockingAudits = new Audit[]
         {
@@ -486,7 +493,7 @@ public class Audit_UnitTests
         var entity = new MyAuditableEntity
         {
             Name = "Foo",
-            Audits = JsonSerializer.SerializeToElement(mockingAudits, AuditStatic.JsonStaticOptions)
+            Audits = JsonSerializer.SerializeToElement(mockingAudits, AuditProviderConfiguration.JsonOptions)
         };
 
         var newAudit = new Audit
@@ -518,7 +525,7 @@ public class Audit_UnitTests
             MaxStoredAudits = 10
         };
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var mockingAudits = new Audit[]
         {
@@ -536,7 +543,7 @@ public class Audit_UnitTests
         var entity = new MyAuditableEntity
         {
             Name = "Foo",
-            Audits = JsonSerializer.SerializeToElement(mockingAudits, AuditStatic.JsonStaticOptions)
+            Audits = JsonSerializer.SerializeToElement(mockingAudits, AuditProviderConfiguration.JsonOptions)
         };
 
         var newAudit = new Audit
@@ -568,7 +575,7 @@ public class Audit_UnitTests
             MaxStoredAudits = 10
         };
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var mockingAudits = new Audit[]
         {
@@ -582,7 +589,7 @@ public class Audit_UnitTests
         var entity = new MyAuditableEntity
         {
             Name = "Foo",
-            Audits = JsonSerializer.SerializeToElement(mockingAudits, AuditStatic.JsonStaticOptions)
+            Audits = JsonSerializer.SerializeToElement(mockingAudits, AuditProviderConfiguration.JsonOptions)
         };
 
         var newAudit = new Audit
@@ -614,7 +621,7 @@ public class Audit_UnitTests
             MaxStoredAudits = 1
         };
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var mockingAudits = new Audit[]
         {
@@ -623,7 +630,7 @@ public class Audit_UnitTests
         var entity = new MyAuditableEntity
         {
             Name = "Foo",
-            Audits = JsonSerializer.SerializeToElement(mockingAudits, AuditStatic.JsonStaticOptions)
+            Audits = JsonSerializer.SerializeToElement(mockingAudits, AuditProviderConfiguration.JsonOptions)
         };
 
         var newAudit = new Audit
@@ -643,7 +650,7 @@ public class Audit_UnitTests
 
         var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo" };
 
@@ -663,7 +670,7 @@ public class Audit_UnitTests
 
         var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo", IsDeleted = true };
 
@@ -683,7 +690,7 @@ public class Audit_UnitTests
 
         var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo" };
 
@@ -700,7 +707,7 @@ public class Audit_UnitTests
 
         var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo" };
 
@@ -717,7 +724,7 @@ public class Audit_UnitTests
 
         var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { LastName = "Foo" };
 
@@ -734,7 +741,7 @@ public class Audit_UnitTests
 
         var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo", LastName = "Foo" };
 
@@ -749,7 +756,7 @@ public class Audit_UnitTests
         stopWatch.Stop();
         success.Should().BeTrue();
 
-        var audits = entity.GetAudits();
+        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
         audits.Should().NotBeNull();
         audits.Should().HaveCount(1);
 
@@ -772,7 +779,7 @@ public class Audit_UnitTests
 
         var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyEntity();
 
@@ -793,7 +800,7 @@ public class Audit_UnitTests
 
         var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntityWithoutSoftDelete();
 
@@ -814,7 +821,7 @@ public class Audit_UnitTests
 
         var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyEntity { Name = "Foo" };
 
@@ -835,7 +842,7 @@ public class Audit_UnitTests
 
         var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo" };
 
@@ -849,7 +856,7 @@ public class Audit_UnitTests
         success = await interceptor.StoringAuditAsync(modificationEntry, dbContext);
         success.Should().BeTrue();
 
-        var audits = entity.GetAudits();
+        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
         audits.Should().NotBeNull();
         audits.Should().HaveCount(2);
 
@@ -879,7 +886,7 @@ public class Audit_UnitTests
 
         var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Payload = JsonDocument.Parse(@"[{""name"": ""arash""}]") };
 
@@ -890,7 +897,7 @@ public class Audit_UnitTests
         stopWatch.Stop();
         success.Should().BeTrue();
 
-        var audits = entity.GetAudits();
+        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
         audits.Should().NotBeNull();
         audits.Should().ContainSingle();
 
@@ -913,7 +920,7 @@ public class Audit_UnitTests
 
         var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity
         {
@@ -932,7 +939,7 @@ public class Audit_UnitTests
         stopWatch.Stop();
         success.Should().BeTrue();
 
-        var audits = entity.GetAudits();
+        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
         audits.Should().NotBeNull();
         audits.Should().ContainSingle();
 
@@ -974,7 +981,7 @@ public class Audit_UnitTests
 
         var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { NullableInt = 3 };
 
@@ -985,7 +992,7 @@ public class Audit_UnitTests
         stopWatch.Stop();
         success.Should().BeTrue();
 
-        var audits = entity.GetAudits();
+        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
         audits.Should().NotBeNull();
         audits.Should().ContainSingle();
 
@@ -1009,7 +1016,7 @@ public class Audit_UnitTests
 
         var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { NullableInt = null };
 
@@ -1020,7 +1027,7 @@ public class Audit_UnitTests
         stopWatch.Stop();
         success.Should().BeTrue();
 
-        var audits = entity.GetAudits();
+        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
         audits.Should().NotBeNull();
         audits.Should().ContainSingle();
 
@@ -1044,7 +1051,7 @@ public class Audit_UnitTests
 
         var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity
         {
@@ -1065,7 +1072,7 @@ public class Audit_UnitTests
         stopWatch.Stop();
         success.Should().BeTrue();
 
-        var audits = entity.GetAudits();
+        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
         audits.Should().NotBeNull();
         audits.Should().ContainSingle();
 
@@ -1111,7 +1118,7 @@ public class Audit_UnitTests
         var options = new AuditProviderOptions();
         options.IncludedFlags.Remove(AuditFlag.Changed);
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity
         {
@@ -1144,7 +1151,7 @@ public class Audit_UnitTests
 
         var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity
         {
@@ -1175,7 +1182,7 @@ public class Audit_UnitTests
 
         var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity
         {
@@ -1192,7 +1199,7 @@ public class Audit_UnitTests
         stopWatch.Stop();
         success.Should().BeTrue();
 
-        var audits = entity.GetAudits();
+        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
         audits.Should().NotBeNull();
         audits.Should().ContainSingle();
 
@@ -1219,7 +1226,7 @@ public class Audit_UnitTests
 
         var options = new AuditProviderOptions();
         var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
-        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, logger);
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity
         {
@@ -1236,7 +1243,7 @@ public class Audit_UnitTests
         stopWatch.Stop();
         success.Should().BeTrue();
 
-        var audits = entity.GetAudits();
+        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
         audits.Should().NotBeNull();
         audits.Should().ContainSingle();
 

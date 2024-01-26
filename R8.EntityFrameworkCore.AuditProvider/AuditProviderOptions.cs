@@ -36,6 +36,6 @@ namespace R8.EntityFrameworkCore.AuditProvider
         /// <summary>
         /// A <see cref="Func{TResult}"/> that represents a method to get current user.
         /// </summary>
-        public Func<IServiceProvider, AuditProviderUser>? UserProvider { get; set; }
+        public Func<IServiceProvider, AuditProviderUser?>? UserProvider { get; set; }
     }
 }

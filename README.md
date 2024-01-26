@@ -36,6 +36,7 @@ services.AddDbContext<YourDbContext>((serviceProvider, optionsBuilder) =>
     - Example for `Microsoft Sql Server`: [AggregateAuditable.cs](https://github.com/iamr8/R8.EntityFrameworkCore.AuditProvider/blob/master/R8.EntityFrameworkCore.AuditProvider.Tests/MsSqlTests/AggregateAuditable.cs)
 - then inherit your entity from `AggregateAuditable`:
 
+---
 ```csharp
 public record YourEntity : AggregateAuditable
 {
@@ -57,6 +58,19 @@ public record YourEntity : AggregateAuditable
 Migrate your database.
 
 _Highly recommended to test it on a test database first, to avoid any data loss._
+
+#### Step 4:
+To take advantages of `JsonElement Audits` property, you can easily cast it to `AuditCollection`:
+```csharp
+var audits = (AuditCollection)entity.Audits.Value; // Cast to AuditCollection
+    
+JsonElement jsonElement = audits.Element; // Get underlying JsonElement
+string json = audits.GetRawText(); // Get raw text of JsonElement
+
+Audit[] deserializedAudits = audits.ToArray(); // Get deserialized audits
+Audit creationAudit = audits.GetCreated(); // Get created audit
+Audit lastUpdatedAudit = audits.GetLastUpdated(); // Get last updated audit (except Deletion audit)
+```
 
 ---
 
