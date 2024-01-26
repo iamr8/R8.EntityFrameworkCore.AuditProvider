@@ -67,7 +67,7 @@ var audits = (AuditCollection)entity.Audits.Value; // Cast to AuditCollection
 JsonElement jsonElement = audits.Element; // Get underlying JsonElement
 string json = audits.GetRawText(); // Get raw text of JsonElement
 
-Audit[] deserializedAudits = audits.ToArray(); // Get deserialized audits
+Audit[] deserializedAudits = audits.Deserialize(); // Get deserialized audits
 Audit creationAudit = audits.GetCreated(); // Get created audit
 Audit lastUpdatedAudit = audits.GetLastUpdated(); // Get last updated audit (except Deletion audit)
 ```

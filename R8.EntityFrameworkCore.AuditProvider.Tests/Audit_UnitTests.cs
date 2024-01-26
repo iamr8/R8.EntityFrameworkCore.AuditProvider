@@ -450,7 +450,7 @@ public class Audit_UnitTests
             Flag = AuditFlag.Deleted,
             DateTime = DateTime.UtcNow.AddSeconds(1)
         };
-        var audits = interceptor.GetAudits(entity, newAudit);
+        var audits = interceptor.AppendAudit(entity, newAudit);
         audits.Should().NotBeNull();
         audits.Should().HaveCount(options.MaxStoredAudits.Value);
         audits[0].Flag.Should().Be(AuditFlag.Created);
@@ -501,7 +501,7 @@ public class Audit_UnitTests
             Flag = AuditFlag.Deleted,
             DateTime = DateTime.UtcNow.AddSeconds(1)
         };
-        var audits = interceptor.GetAudits(entity, newAudit);
+        var audits = interceptor.AppendAudit(entity, newAudit);
         audits.Should().NotBeNull();
         audits.Should().HaveCount(options.MaxStoredAudits.Value);
         audits[0].Flag.Should().Be(mockingAudits[2].Flag);
@@ -551,7 +551,7 @@ public class Audit_UnitTests
             Flag = AuditFlag.Deleted,
             DateTime = DateTime.UtcNow.AddSeconds(1)
         };
-        var audits = interceptor.GetAudits(entity, newAudit);
+        var audits = interceptor.AppendAudit(entity, newAudit);
         audits.Should().NotBeNull();
         audits.Should().HaveCount(options.MaxStoredAudits.Value);
         audits[0].Flag.Should().Be(mockingAudits[1].Flag);
@@ -597,7 +597,7 @@ public class Audit_UnitTests
             Flag = AuditFlag.Deleted,
             DateTime = DateTime.UtcNow.AddSeconds(1)
         };
-        var audits = interceptor.GetAudits(entity, newAudit);
+        var audits = interceptor.AppendAudit(entity, newAudit);
         audits.Should().NotBeNull();
         audits.Should().HaveCount(mockingAudits.Length + 1);
         audits[0].Flag.Should().Be(mockingAudits[0].Flag);
@@ -639,7 +639,7 @@ public class Audit_UnitTests
             DateTime = DateTime.UtcNow.AddSeconds(1)
         };
 
-        var action = () => interceptor.GetAudits(entity, newAudit);
+        var action = () => interceptor.AppendAudit(entity, newAudit);
         action.Should().ThrowExactly<InvalidOperationException>();
     }
 

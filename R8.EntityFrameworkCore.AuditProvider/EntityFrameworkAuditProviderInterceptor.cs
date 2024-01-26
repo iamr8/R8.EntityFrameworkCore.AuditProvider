@@ -163,13 +163,13 @@ namespace R8.EntityFrameworkCore.AuditProvider
                     throw new NotSupportedException($"State {entry.State} is not supported.");
             }
 
-            var audits = GetAudits(entityAuditable, audit);
+            var audits = AppendAudit(entityAuditable, audit);
             entityAuditable.Audits = JsonSerializer.SerializeToElement(audits, _options.JsonOptions);
 
             return true;
         }
 
-        internal Audit[] GetAudits(IAuditable entityAuditable, Audit audit)
+        internal Audit[] AppendAudit(IAuditable entityAuditable, Audit audit)
         {
             Memory<Audit> newAudits;
             if (entityAuditable.Audits != null)
@@ -199,14 +199,14 @@ namespace R8.EntityFrameworkCore.AuditProvider
                         var index = i - startIndex;
                         newAudits.Span[index - adjustment] = existingAudits.Span[i];
                     }
-                    newAudits.Span[^1] = audit;
                 }
                 else
                 {
                     newAudits = new Audit[existingAudits.Length + 1];
                     existingAudits.CopyTo(newAudits);
-                    newAudits.Span[^1] = audit;
                 }
+                
+                newAudits.Span[^1] = audit;
             }
             else
             {

@@ -29,7 +29,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
         public IList<AuditFlag> IncludedFlags { get; } = new List<AuditFlag> { AuditFlag.Created, AuditFlag.Changed, AuditFlag.Deleted, AuditFlag.UnDeleted };
         
         /// <summary>
-        /// A <see cref="int"/> value that represents maximum number of audits to be stored.
+        /// A <see cref="int"/> value that represents maximum number of audits to be stored. Audit with flag <see cref="AuditFlag.Created"/> remains as the first audit (if provided).
         /// </summary>
         public int? MaxStoredAudits { get; set; }
         
