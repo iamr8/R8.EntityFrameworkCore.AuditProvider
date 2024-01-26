@@ -8,8 +8,6 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Logging;
 
-using R8.EntityFrameworkCore.AuditProvider.Abstractions;
-
 namespace R8.EntityFrameworkCore.AuditProvider
 {
     /// <summary>

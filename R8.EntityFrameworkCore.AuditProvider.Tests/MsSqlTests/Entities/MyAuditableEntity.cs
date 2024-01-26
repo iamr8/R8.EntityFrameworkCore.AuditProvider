@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-using R8.EntityFrameworkCore.AuditProvider.Abstractions;
 using R8.EntityFrameworkCore.AuditProvider.Tests.Entities;
 
 namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Entities;

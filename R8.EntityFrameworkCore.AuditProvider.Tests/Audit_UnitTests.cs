@@ -5,7 +5,6 @@ using FluentAssertions.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.Extensions.Logging;
-using R8.EntityFrameworkCore.AuditProvider.Abstractions;
 using R8.EntityFrameworkCore.AuditProvider.Tests.Entities;
 using R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests;
 using R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.Entities;

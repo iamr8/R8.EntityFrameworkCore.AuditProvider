@@ -1,7 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using R8.EntityFrameworkCore.AuditProvider.Abstractions;
 using R8.XunitLogger;
 
 namespace R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.Tests
