@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.Entities;
 
 namespace R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests
 {
@@ -10,6 +11,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests
 
         public virtual DbSet<MyAuditableEntity> MyAuditableEntities { get; set; }
         public virtual DbSet<MyEntity> MyEntities { get; set; }
+        public virtual DbSet<MyAuditableEntityWithoutSoftDelete> MyAuditableEntitiesWithoutSoftDelete { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

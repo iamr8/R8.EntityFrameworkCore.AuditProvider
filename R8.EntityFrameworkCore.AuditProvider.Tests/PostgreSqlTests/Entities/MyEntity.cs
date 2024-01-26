@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using R8.EntityFrameworkCore.AuditProvider.Tests.Entities;
 
-namespace R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests;
+namespace R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.Entities;
 
 public record MyEntity : IAggregateEntity
 {

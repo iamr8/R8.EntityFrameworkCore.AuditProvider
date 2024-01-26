@@ -1,19 +1,28 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using R8.EntityFrameworkCore.AuditProvider.Abstractions;
+using R8.XunitLogger;
 
 namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Tests
 {
-    public class MsSqlTestFixture : IAsyncLifetime
+    public class MsSqlTestFixture : IAsyncLifetime, IXunitLogProvider
     {
         private readonly ServiceProvider _serviceProvider;
 
         internal readonly MsSqlDbContext MsSqlDbContext;
 
+        public event Action<string>? OnWriteLine;
+
         public MsSqlTestFixture()
         {
             _serviceProvider = new ServiceCollection()
                 .AddLogging()
+                .AddXunitLogger(s => OnWriteLine?.Invoke(s), o =>
+                {
+                    o.MinimumLevel = LogLevel.Debug;
+                    o.Categories.Add("R8.EntityFrameworkCore.AuditProvider");
+                })
                 .AddEntityFrameworkAuditProvider(options =>
                 {
                     options.MaxStoredAudits = 10;

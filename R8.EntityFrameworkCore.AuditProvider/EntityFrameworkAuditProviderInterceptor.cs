@@ -1,13 +1,13 @@
-﻿using System.Buffers;
-using System.Collections;
-using System.Diagnostics;
+﻿using System.Collections;
 using System.Reflection;
 using System.Text.Json;
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Logging;
+
 using R8.EntityFrameworkCore.AuditProvider.Abstractions;
 
 namespace R8.EntityFrameworkCore.AuditProvider
@@ -48,10 +48,12 @@ namespace R8.EntityFrameworkCore.AuditProvider
             if (entry.State is not (EntityState.Added or EntityState.Deleted or EntityState.Modified))
                 return false;
 
+            using var logScope = _logger.BeginScope("Storing audit for {EntityName} with state {EntityState}", entry.EntityType.Name, entry.State);
             var propertyEntries = entry.Members.OfType<PropertyEntry>().ToArray();
             if (propertyEntries.Length == 0)
             {
-                _logger.LogDebug("No changes found for {EntityName} with state {EntityState}", entry.EntityType.Name, entry.State);
+                // Unreachable code
+                _logger.LogDebug(AuditEventId.NoChangesFound, "Entity {EntityName} with state {EntityState} has no changes", entry.EntityType.Name, entry.State);
                 return false;
             }
 
@@ -65,8 +67,6 @@ namespace R8.EntityFrameworkCore.AuditProvider
                     entitySoftDelete.IsDeleted = true;
                     entry.DetectChanges();
                     entry.State = EntityState.Modified;
-
-                    _logger.LogDebug("Entity {EntityName} with state {EntityState} is marked as deleted", entry.EntityType.Name, entry.State);
                 }
             }
             else
@@ -74,14 +74,14 @@ namespace R8.EntityFrameworkCore.AuditProvider
                 if (entry.State == EntityState.Deleted)
                 {
                     // Delete permanently
-                    _logger.LogDebug("Entity {EntityName} with state {EntityState} is deleted permanently", entry.EntityType.Name, entry.State);
+                    _logger.LogDebug(AuditEventId.NotAuditableDelete, "Entity {EntityName} with state {EntityState} does not implemented by {AuditableDelete}. So it will be deleted permanently", entry.EntityType.Name, entry.State, nameof(IAuditableDelete));
                     return false;
                 }
             }
 
             if (entity is not IAuditable entityAuditable)
             {
-                _logger.LogDebug("Entity {EntityName} with state {EntityState} is not auditable", entry.EntityType.Name, entry.State);
+                _logger.LogDebug(AuditEventId.NotAuditable, "Entity {EntityName} with state {EntityState} does not implemented by {Auditable}. So it will be ignored while is not auditable", entry.EntityType.Name, entry.State, nameof(IAuditable));
                 return false;
             }
 
@@ -105,10 +105,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
                     if (deleted.HasValue)
                     {
                         if (changes.Length > 0)
-                        {
-                            _logger.LogWarning("Cannot delete/undelete and update at the same time");
                             throw new NotSupportedException("Cannot delete/undelete and update at the same time.");
-                        }
 
                         audit.Flag = deleted.Value switch
                         {
@@ -116,19 +113,21 @@ namespace R8.EntityFrameworkCore.AuditProvider
                             true => AuditFlag.Deleted,
                         };
 
-                        if (audit.Flag == AuditFlag.Deleted && !_options.IncludedFlags.Contains(AuditFlag.Deleted))
-                            return false;
-                        
-                        if (audit.Flag == AuditFlag.UnDeleted && !_options.IncludedFlags.Contains(AuditFlag.UnDeleted))
-                            return false;
-                        
-                        _logger.LogDebug("Entity {EntityName} with state {EntityState} is marked as deleted", entry.EntityType.Name, entry.State);
+                        switch (audit.Flag)
+                        {
+                            case AuditFlag.Deleted when !_options.IncludedFlags.Contains(AuditFlag.Deleted):
+                            case AuditFlag.UnDeleted when !_options.IncludedFlags.Contains(AuditFlag.UnDeleted):
+                                return false;
+                            default:
+                                _logger.LogDebug(audit.Flag == AuditFlag.Deleted ? AuditEventId.Deleted : AuditEventId.UnDeleted,"Entity {EntityName} is marked as {AuditFlag}", entry.EntityType.Name, audit.Flag);
+                                break;
+                        }
                     }
                     else
                     {
                         if (changes.Length == 0)
                         {
-                            _logger.LogDebug("No changes found for {EntityName} with state {EntityState}", entry.EntityType.Name, entry.State);
+                            _logger.LogDebug(AuditEventId.NoChangesFound, "Entity {EntityName} with state {EntityState} has no changes", entry.EntityType.Name, entry.State);
                             return false;
                         }
 
@@ -137,7 +136,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
                         
                         audit.Flag = AuditFlag.Changed;
                         audit.Changes = changes.ToArray();
-                        _logger.LogDebug("Entity {EntityName} with state {EntityState} is changed", entry.EntityType.Name, entry.State);
+                        _logger.LogDebug(AuditEventId.Changed, "Entity {EntityName} is marked as {AuditFlag}", entry.EntityType.Name, audit.Flag);
                     }
 
                     break;
@@ -149,7 +148,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
                         return false;
                     
                     audit.Flag = AuditFlag.Created;
-                    _logger.LogDebug("Entity {EntityName} with state {EntityState} is created", entry.EntityType.Name, entry.State);
+                    _logger.LogDebug(AuditEventId.Created, "Entity {EntityName} is marked at {AuditFlag}", entry.EntityType.Name, audit.Flag);
                     break;
                 }
 
@@ -160,7 +159,6 @@ namespace R8.EntityFrameworkCore.AuditProvider
             var audits = GetAudits(entityAuditable, audit);
             entityAuditable.Audits = JsonSerializer.SerializeToElement(audits, _options.JsonOptions);
 
-            _logger.LogDebug("Entity {EntityName} with state {EntityState} is audited", entry.EntityType.Name, entry.State);
             return true;
         }
 

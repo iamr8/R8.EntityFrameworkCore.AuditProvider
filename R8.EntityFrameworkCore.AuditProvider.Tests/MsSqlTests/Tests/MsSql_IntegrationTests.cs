@@ -2,11 +2,26 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using R8.EntityFrameworkCore.AuditProvider.Abstractions;
+using R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Entities;
+using Xunit.Abstractions;
 
 namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Tests
 {
-    public class MsSql_IntegrationTests : MsSqlTestFixture
+    public class MsSql_IntegrationTests : MsSqlTestFixture, IDisposable
     {
+        private readonly ITestOutputHelper _outputHelper;
+
+        public MsSql_IntegrationTests(ITestOutputHelper outputHelper)
+        {
+            _outputHelper = outputHelper;
+            this.OnWriteLine += _outputHelper.WriteLine;
+        }
+        
+        public void Dispose()
+        {
+            this.OnWriteLine -= _outputHelper.WriteLine;
+        }
+        
         [Fact]
         public async Task Should_Add_Changes_When_Updated()
         {

@@ -1,11 +1,26 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using R8.EntityFrameworkCore.AuditProvider.Abstractions;
+using R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.Entities;
+using Xunit.Abstractions;
 
 namespace R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.Tests
 {
-    public class PostgreSql_IntegrationTests : PostgreSqlTestFixture
+    public class PostgreSql_IntegrationTests : PostgreSqlTestFixture, IDisposable
     {
+        private readonly ITestOutputHelper _outputHelper;
+
+        public PostgreSql_IntegrationTests(ITestOutputHelper outputHelper)
+        {
+            _outputHelper = outputHelper;
+            this.OnWriteLine += _outputHelper.WriteLine;
+        }
+        
+        public void Dispose()
+        {
+            this.OnWriteLine -= _outputHelper.WriteLine;
+        }
+        
         [Fact]
         public async Task Should_Add_Changes_When_Updated()
         {
@@ -316,6 +331,28 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.Tests
             entity.Should().BeNull();
         }
 
+        [Fact]
+        public async Task Should_DeletedPermanently_When_Entity_IsNotDeletable_But_Auditable()
+        {
+            // Act
+            var entity = new MyAuditableEntityWithoutSoftDelete()
+            {
+                Name = "1.0.0",
+            };
+            PostgreSqlDbContext.Add(entity);
+            await PostgreSqlDbContext.SaveChangesAsync();
+
+            await Task.Delay(500);
+
+            PostgreSqlDbContext.Remove(entity);
+            await PostgreSqlDbContext.SaveChangesAsync();
+
+            entity = await PostgreSqlDbContext.MyAuditableEntitiesWithoutSoftDelete.FirstOrDefaultAsync(x => x.Name == "1.0.0");
+
+            // Arrange
+            entity.Should().BeNull();
+        }
+        
         [Fact]
         public async Task Should_Add_Changes_When_Operations_Done()
         {

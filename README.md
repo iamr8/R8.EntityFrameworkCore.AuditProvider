@@ -31,7 +31,7 @@ services.AddDbContext<YourDbContext>((serviceProvider, optionsBuilder) =>
 
 #### Step 2:
 
-- Implement `IAuditable` (and `IAuditableDelete`) in your `Aggregate Auditable Entity`:
+- Implement `IAuditable` (and `IAuditableDelete`) in your `Aggregate Auditable Entity` _(Or you can implement `IAuditable`/`IAuditableDelete` in your `Entity` directly)_:
     - Example for `PostgreSQL`: [AggregateAuditable.cs](https://github.com/iamr8/R8.EntityFrameworkCore.AuditProvider/blob/master/R8.EntityFrameworkCore.AuditProvider.Tests/PostgreSqlTests/AggregateAuditable.cs)
     - Example for `Microsoft Sql Server`: [AggregateAuditable.cs](https://github.com/iamr8/R8.EntityFrameworkCore.AuditProvider/blob/master/R8.EntityFrameworkCore.AuditProvider.Tests/MsSqlTests/AggregateAuditable.cs)
 - then inherit your entity from `AggregateAuditable`:
@@ -49,6 +49,8 @@ public record YourEntity : AggregateAuditable
     // ...
 }
 ```
+- `Deleted` and `UnDeleted` flags would be stored, only if `IAuditableDelete` implemented.
+- Flags `Created`/`Changed` cannot be done simultaneously with `Deleted`/`UnDeleted`.
 
 #### Step 3:
 

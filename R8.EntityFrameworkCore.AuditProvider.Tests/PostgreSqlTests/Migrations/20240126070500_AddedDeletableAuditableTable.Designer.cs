@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests;
@@ -13,9 +14,11 @@ using R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests;
 namespace R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.Migrations
 {
     [DbContext(typeof(PostgreSqlDbContext))]
-    partial class PostgreSqlDbContextModelSnapshot : ModelSnapshot
+    [Migration("20240126070500_AddedDeletableAuditableTable")]
+    partial class AddedDeletableAuditableTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

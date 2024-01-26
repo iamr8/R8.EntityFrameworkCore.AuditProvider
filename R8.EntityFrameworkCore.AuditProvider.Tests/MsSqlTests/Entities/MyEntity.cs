@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using R8.EntityFrameworkCore.AuditProvider.Tests.Entities;
 
-namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests;
+namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Entities;
 
 public record MyEntity : IAggregateEntity
 {
