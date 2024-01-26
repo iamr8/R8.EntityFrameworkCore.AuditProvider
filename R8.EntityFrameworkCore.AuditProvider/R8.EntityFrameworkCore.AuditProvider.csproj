@@ -4,10 +4,30 @@
         <TargetFrameworks>net6.0;net7.0;net8.0</TargetFrameworks>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-
         <EnableNETAnalyzers>true</EnableNETAnalyzers>
+        <Version>1.0.0</Version>
+        <Authors>iamr8</Authors>
+        <Description>A .NET package for Entity Framework, providing comprehensive change tracking with deep insights.</Description>
+        <PackageId>R8.EntityFrameworkCore.AuditProvider</PackageId>
+        <PackageTags>ef, ef-core, audit, postgres, postgresql, mssql, sql</PackageTags>
+        <PackageProjectUrl>https://github.com/iamr8/R8.EntityFrameworkCore.AuditProvider</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/iamr8/R8.EntityFrameworkCore.AuditProvider</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <IncludeSymbols>true</IncludeSymbols>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <LangVersion>10</LangVersion>
     </PropertyGroup>
 
+    <ItemGroup>
+        <None Include="$(SolutionDir)README.md" Pack="true" PackagePath=""/>
+        <Content Include="$(SolutionDir)README.md">
+            <Link>README.md</Link>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+    </ItemGroup>
+    
     <ItemGroup>
         <PackageReference Include="Meziantou.Analyzer" Version="2.0.138">
             <PrivateAssets>all</PrivateAssets>
