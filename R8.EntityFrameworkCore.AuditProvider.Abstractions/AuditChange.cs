@@ -1,7 +1,7 @@
 ﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace R8.EntityFrameworkCore.AuditProvider
+namespace R8.EntityFrameworkCore.AuditProvider.Abstractions
 {
     public readonly record struct AuditChange(string Column, JsonElement? OldValue, JsonElement? NewValue)
     {
@@ -28,7 +28,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
             if (string.IsNullOrEmpty(Column) || !OldValue.HasValue || !NewValue.HasValue)
                 return 0;
 
-            return Column.GetHashCode() + OldValue.GetHashCode() + NewValue.GetHashCode();
+            return Column.GetHashCode() + OldValue?.GetHashCode() ?? 0 + NewValue?.GetHashCode() ?? 0;
         }
 
         [JsonIgnore] 

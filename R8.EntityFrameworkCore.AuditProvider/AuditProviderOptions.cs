@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using R8.EntityFrameworkCore.AuditProvider.Abstractions;
+
 namespace R8.EntityFrameworkCore.AuditProvider
 {
     public class AuditProviderOptions

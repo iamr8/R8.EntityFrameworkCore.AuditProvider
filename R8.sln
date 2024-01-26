@@ -4,6 +4,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "R8.EntityFrameworkCore.Audi
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "R8.EntityFrameworkCore.AuditProvider.Tests", "R8.EntityFrameworkCore.AuditProvider.Tests\R8.EntityFrameworkCore.AuditProvider.Tests.csproj", "{7511070B-41F5-4690-BC3C-3F1BA5BDC7A2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "R8.EntityFrameworkCore.AuditProvider.Abstractions", "R8.EntityFrameworkCore.AuditProvider.Abstractions\R8.EntityFrameworkCore.AuditProvider.Abstractions.csproj", "{E2F18AC2-3E25-4E88-B642-A14F8B99BBDB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +20,9 @@ Global
 		{7511070B-41F5-4690-BC3C-3F1BA5BDC7A2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7511070B-41F5-4690-BC3C-3F1BA5BDC7A2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7511070B-41F5-4690-BC3C-3F1BA5BDC7A2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E2F18AC2-3E25-4E88-B642-A14F8B99BBDB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E2F18AC2-3E25-4E88-B642-A14F8B99BBDB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E2F18AC2-3E25-4E88-B642-A14F8B99BBDB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E2F18AC2-3E25-4E88-B642-A14F8B99BBDB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

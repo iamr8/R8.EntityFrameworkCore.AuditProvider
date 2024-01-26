@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFrameworks>net6.0;net7.0;net8.0</TargetFrameworks>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <EnableNETAnalyzers>true</EnableNETAnalyzers>
+        <Version>1.0.2</Version>
+        <Authors>iamr8</Authors>
+        <Description>A .NET package for Entity Framework, providing comprehensive change tracking with deep insights.</Description>
+        <PackageId>R8.EntityFrameworkCore.AuditProvider.Abstractions</PackageId>
+        <PackageTags>ef, ef-core, audit, postgres, postgresql, mssql, sql</PackageTags>
+        <PackageProjectUrl>https://github.com/iamr8/R8.EntityFrameworkCore.AuditProvider</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/iamr8/R8.EntityFrameworkCore.AuditProvider</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <IncludeSymbols>true</IncludeSymbols>
+        <LangVersion>10</LangVersion>
+    </PropertyGroup>
+
+</Project>
