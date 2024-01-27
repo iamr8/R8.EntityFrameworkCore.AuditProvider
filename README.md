@@ -47,6 +47,8 @@ services.AddDbContext<YourDbContext>((serviceProvider, optionsBuilder) =>
 | `JsonOptions`      | `System.Text.Json.JsonSerializerOptions`           | Json serializer options to serialize and deserialize audits | An optimal setting |
 | `MaxStoredAudits`* | `int?`                                             | Maximum number of audits to store in `Audits` column        | `null`             |
 | `UserProvider`     | `Func<IServiceProvider, EntityFrameworkAuditUser>` | User provider to get current user id                        | `null`             |
+
+
 If the number of audits exceeds this number, the earliest audits (except `Created`) will be removed from the column. If `null`, all audits will be stored.
 
 #### Step 2:
