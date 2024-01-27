@@ -1,19 +1,14 @@
 using System.Diagnostics;
 using System.Text.Json;
-
 using FluentAssertions;
 using FluentAssertions.Extensions;
-
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.Extensions.Logging;
-
 using NSubstitute;
-
 using R8.EntityFrameworkCore.AuditProvider.Abstractions;
 using R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests;
 using R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.Entities;
-
 using Xunit.Abstractions;
 
 namespace R8.EntityFrameworkCore.AuditProvider.Tests;
@@ -63,7 +58,7 @@ public class Audit_UnitTests
     {
         return Substitute.For<IServiceProvider>();
     }
-    
+
     [Theory]
     [InlineData(EntityState.Detached)]
     [InlineData(EntityState.Unchanged)]
@@ -85,6 +80,226 @@ public class Audit_UnitTests
         success.Should().BeFalse();
 
         _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
+    }
+
+    [Fact]
+    public async Task should_return_creation_audit_when_GetCreated_called()
+    {
+        var dbContext = CreateDbContext();
+
+        var options = new AuditProviderOptions();
+        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
+
+        var entity = new MyAuditableEntity { Name = "Foo" };
+        var members = new List<PropertyEntry> { dbContext.GetPropertyEntry(entity, x => x.Name) };
+        var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
+        var success = await interceptor.StoringAuditAsync(entry, dbContext);
+        success.Should().BeTrue();
+
+        var creationMembers = new List<PropertyEntry>
+        {
+            dbContext.GetPropertyEntryWithNewValue(entity, x => x.Name, "Bar"),
+        };
+        entry = new MockingAuditEntityEntry(EntityState.Modified, entity, creationMembers);
+        success = await interceptor.StoringAuditAsync(entry, dbContext);
+        success.Should().BeTrue();
+
+        entity.Audits.Should().NotBeNull();
+        var auditCollection = (AuditCollection)entity.Audits.Value;
+        auditCollection.Should().NotBeNull();
+
+        var createdAudit = auditCollection.GetCreated();
+        createdAudit.Should().NotBeNull();
+        createdAudit.Value.Flag.Should().Be(AuditFlag.Created);
+        createdAudit.Value.DateTime.Should().NotBe(DateTime.MinValue);
+    }
+
+    [Fact]
+    public void should_not_return_anything_when_AuditCollection_is_empty()
+    {
+        const string json = "[]";
+        var jsonElement = JsonSerializer.Deserialize<JsonElement>(json, AuditProviderConfiguration.JsonOptions);
+        var auditCollection = (AuditCollection)jsonElement;
+        auditCollection.Should().NotBeNull();
+
+        auditCollection.Element.Should().Be(jsonElement);
+        auditCollection.GetCreated().Should().BeNull();
+        auditCollection.GetLast().Should().BeNull();
+    }
+
+    [Fact]
+    public async Task should_return_creation_audit_when_GetCreated_called_and_already_deserialized()
+    {
+        var dbContext = CreateDbContext();
+
+        var options = new AuditProviderOptions();
+        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
+
+        var entity = new MyAuditableEntity { Name = "Foo" };
+        var members = new List<PropertyEntry> { dbContext.GetPropertyEntry(entity, x => x.Name) };
+        var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
+        var success = await interceptor.StoringAuditAsync(entry, dbContext);
+        success.Should().BeTrue();
+
+        var creationMembers = new List<PropertyEntry>
+        {
+            dbContext.GetPropertyEntryWithNewValue(entity, x => x.Name, "Bar"),
+        };
+        entry = new MockingAuditEntityEntry(EntityState.Modified, entity, creationMembers);
+        success = await interceptor.StoringAuditAsync(entry, dbContext);
+        success.Should().BeTrue();
+
+        entity.Audits.Should().NotBeNull();
+        var auditCollection = (AuditCollection)entity.Audits.Value;
+        auditCollection.Should().NotBeNull();
+
+        var audits = auditCollection.Deserialize();
+        audits.Should().NotBeNull();
+        audits.Should().HaveCount(2);
+
+        var createdAudit = auditCollection.GetCreated();
+        createdAudit.Should().NotBeNull();
+        createdAudit.Value.Flag.Should().Be(AuditFlag.Created);
+        createdAudit.Value.DateTime.Should().NotBe(DateTime.MinValue);
+    }
+
+    [Fact]
+    public async Task should_not_return_creation_audit_when_GetCreated_called_but_creation_not_exist()
+    {
+        var dbContext = CreateDbContext();
+
+        var options = new AuditProviderOptions();
+        options.IncludedFlags.Remove(AuditFlag.Created);
+        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
+
+        var entity = new MyAuditableEntity { Name = "Foo" };
+        var members = new List<PropertyEntry> { dbContext.GetPropertyEntry(entity, x => x.Name) };
+        var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
+        var success = await interceptor.StoringAuditAsync(entry, dbContext);
+        success.Should().BeFalse();
+
+        var creationMembers = new List<PropertyEntry>
+        {
+            dbContext.GetPropertyEntryWithNewValue(entity, x => x.Name, "Bar"),
+        };
+        entry = new MockingAuditEntityEntry(EntityState.Modified, entity, creationMembers);
+        success = await interceptor.StoringAuditAsync(entry, dbContext);
+        success.Should().BeTrue();
+
+        entity.Audits.Should().NotBeNull();
+        var auditCollection = (AuditCollection)entity.Audits.Value;
+        auditCollection.Should().NotBeNull();
+
+        var createdAudit = auditCollection.GetCreated();
+        createdAudit.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task should_return_last_audit_when_GetLast_called()
+    {
+        var dbContext = CreateDbContext();
+
+        var options = new AuditProviderOptions();
+        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
+
+        var entity = new MyAuditableEntity { Name = "Foo" };
+        var members = new List<PropertyEntry> { dbContext.GetPropertyEntry(entity, x => x.Name) };
+        var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
+        var success = await interceptor.StoringAuditAsync(entry, dbContext);
+        success.Should().BeTrue();
+
+        var creationMembers = new List<PropertyEntry>
+        {
+            dbContext.GetPropertyEntryWithNewValue(entity, x => x.Name, "Bar"),
+        };
+        entry = new MockingAuditEntityEntry(EntityState.Modified, entity, creationMembers);
+        success = await interceptor.StoringAuditAsync(entry, dbContext);
+        success.Should().BeTrue();
+
+        entity.Audits.Should().NotBeNull();
+        var auditCollection = (AuditCollection)entity.Audits.Value;
+        auditCollection.Should().NotBeNull();
+
+        var lastAudit = auditCollection.GetLast();
+        lastAudit.Should().NotBeNull();
+        lastAudit.Value.Flag.Should().Be(AuditFlag.Changed);
+        lastAudit.Value.DateTime.Should().NotBe(DateTime.MinValue);
+        lastAudit.Value.Changes.Should().Contain(x => x.Column == nameof(MyAuditableEntity.Name));
+    }
+
+    [Fact]
+    public async Task should_not_return_deletion_audit_when_GetLast_called_but_deleted_not_included()
+    {
+        var dbContext = CreateDbContext();
+
+        var options = new AuditProviderOptions();
+        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
+
+        var entity = new MyAuditableEntity { Name = "Foo" };
+        var members = new List<PropertyEntry> { dbContext.GetPropertyEntry(entity, x => x.Name) };
+        var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
+        var success = await interceptor.StoringAuditAsync(entry, dbContext);
+        success.Should().BeTrue();
+
+        members = new List<PropertyEntry> { dbContext.GetPropertyEntryWithNewValue(entity, x => x.Name, "Bar") };
+        entry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
+        success = await interceptor.StoringAuditAsync(entry, dbContext);
+        success.Should().BeTrue();
+
+        members = new List<PropertyEntry> { dbContext.GetPropertyEntryWithNewValue(entity, x => x.IsDeleted, true) };
+        entry = new MockingAuditEntityEntry(EntityState.Deleted, entity, members);
+        success = await interceptor.StoringAuditAsync(entry, dbContext);
+        success.Should().BeTrue();
+
+        entity.Audits.Should().NotBeNull();
+        var auditCollection = (AuditCollection)entity.Audits.Value;
+        auditCollection.Should().NotBeNull();
+
+        var lastAudit = auditCollection.GetLast(false);
+        lastAudit.Should().NotBeNull();
+        lastAudit.Value.Flag.Should().Be(AuditFlag.Changed);
+        lastAudit.Value.DateTime.Should().NotBe(DateTime.MinValue);
+        lastAudit.Value.Changes.Should().Contain(x => x.Column == nameof(MyAuditableEntity.Name));
+    }
+
+    [Fact]
+    public async Task should_return_deletion_audit_when_GetLast_called_when_deleted_included()
+    {
+        var dbContext = CreateDbContext();
+
+        var options = new AuditProviderOptions();
+        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
+
+        var entity = new MyAuditableEntity { Name = "Foo" };
+        var members = new List<PropertyEntry> { dbContext.GetPropertyEntry(entity, x => x.Name) };
+        var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
+        var success = await interceptor.StoringAuditAsync(entry, dbContext);
+        success.Should().BeTrue();
+
+        members = new List<PropertyEntry> { dbContext.GetPropertyEntryWithNewValue(entity, x => x.Name, "Bar") };
+        entry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
+        success = await interceptor.StoringAuditAsync(entry, dbContext);
+        success.Should().BeTrue();
+
+        members = new List<PropertyEntry> { dbContext.GetPropertyEntryWithNewValue(entity, x => x.IsDeleted, true) };
+        entry = new MockingAuditEntityEntry(EntityState.Deleted, entity, members);
+        success = await interceptor.StoringAuditAsync(entry, dbContext);
+        success.Should().BeTrue();
+
+        entity.Audits.Should().NotBeNull();
+        var auditCollection = (AuditCollection)entity.Audits.Value;
+        auditCollection.Should().NotBeNull();
+
+        var lastAudit = auditCollection.GetLast(true);
+        lastAudit.Should().NotBeNull();
+        lastAudit.Value.Flag.Should().Be(AuditFlag.Deleted);
+        lastAudit.Value.DateTime.Should().NotBe(DateTime.MinValue);
     }
 
     [Fact]
@@ -191,7 +406,7 @@ public class Audit_UnitTests
         lastAudit.User.Value.AdditionalData.Should().ContainKey("FirstName");
         lastAudit.User.Value.AdditionalData.Should().ContainKey("LastName");
         lastAudit.User.Value.AdditionalData.Should().ContainKey("Phone");
-        
+
         lastAudit.User.Value.AdditionalData["Username"].Should().Be(auditUser.AdditionalData["Username"]);
         lastAudit.User.Value.AdditionalData["Email"].Should().Be(auditUser.AdditionalData["Email"]);
         lastAudit.User.Value.AdditionalData["FirstName"].Should().Be(auditUser.AdditionalData["FirstName"]);
@@ -201,7 +416,7 @@ public class Audit_UnitTests
         _outputHelper.WriteLine(entity.Audits.Value.GetRawText());
         _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
     }
-    
+
     [Fact]
     public async Task should_store_maintainer_audit_user_without_additional_user_data()
     {
@@ -239,7 +454,7 @@ public class Audit_UnitTests
         _outputHelper.WriteLine(entity.Audits.Value.GetRawText());
         _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
     }
-    
+
     [Fact]
     public async Task should_store_deletion()
     {
@@ -612,7 +827,7 @@ public class Audit_UnitTests
         audits[^1].Flag.Should().Be(newAudit.Flag);
         audits[^1].DateTime.Should().Be(newAudit.DateTime);
     }
-    
+
     [Fact]
     public void should_throw_exception_when_limit_equals_to_one_and_created_included()
     {

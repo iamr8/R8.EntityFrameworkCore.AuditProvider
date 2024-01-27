@@ -6,22 +6,22 @@
     public enum AuditFlag : ushort
     {
         /// <summary>
-        /// This will be used when EntityAuditable is newly created.
+        /// This will be used when <see cref="IAuditable"/> is newly created.
         /// </summary>
         Created = 0,
 
         /// <summary>
-        /// This will be used when EntityAuditable is changed.
+        /// This will be used when <see cref="IAuditable"/> is changed.
         /// </summary>
         Changed = 1,
 
         /// <summary>
-        /// This will be used when EntityAuditable is deleted.
+        /// This will be used when <see cref="IAuditable"/> is deleted.
         /// </summary>
         Deleted = 2,
 
         /// <summary>
-        /// This will be used when EntityAuditable is undeleted.
+        /// This will be used when <see cref="IAuditable"/> is undeleted.
         /// </summary>
         UnDeleted = 3
     }

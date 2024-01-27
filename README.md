@@ -16,18 +16,38 @@ A .NET package for Entity Framework, providing comprehensive change tracking wit
 // Add AuditProvider
 services.AddEntityFrameworkAuditProvider(options =>
 {
-    // Your options here (See Options section)
+    options.JsonOptions.WriteIndented = false;
+    options.MaxStoredAudits = 10;
+    options.UserProvider = serviceProvider =>
+    {
+        var httpContextAccessor = serviceProvider.GetRequiredService<IHttpContextAccessor>();
+        var user = httpContextAccessor.HttpContext?.User;
+        if (user?.Identity?.IsAuthenticated == true)
+        {
+            var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
+            var username = user.FindFirstValue(ClaimTypes.Name);
+            return new AuditProviderUser(userId, new Dictionary<string, object>
+            {
+                { "Username", username }
+            });
+        }
+        return null;
+    };
 });
 
 services.AddDbContext<YourDbContext>((serviceProvider, optionsBuilder) =>
 {
     // Your DbContext connection configuration here
-    ...
-    
-    // Add AuditProviderInterceptor
+    // ...
     optionsBuilder.AddEntityFrameworkAuditProviderInterceptor(serviceProvider);
 });
 ```
+| Option             | Type                                               | Description                                                 | Default            |
+|--------------------|----------------------------------------------------|-------------------------------------------------------------|--------------------|
+| `JsonOptions`      | `System.Text.Json.JsonSerializerOptions`           | Json serializer options to serialize and deserialize audits | An optimal setting |
+| `MaxStoredAudits`* | `int?`                                             | Maximum number of audits to store in `Audits` column        | `null`             |
+| `UserProvider`     | `Func<IServiceProvider, EntityFrameworkAuditUser>` | User provider to get current user id                        | `null`             |
+If the number of audits exceeds this number, the earliest audits (except `Created`) will be removed from the column. If `null`, all audits will be stored.
 
 #### Step 2:
 
@@ -65,26 +85,12 @@ To take advantages of `JsonElement Audits` property, you can easily cast it to `
 var audits = (AuditCollection)entity.Audits.Value; // Cast to AuditCollection
     
 JsonElement jsonElement = audits.Element; // Get underlying JsonElement
-string json = audits.GetRawText(); // Get raw text of JsonElement
 
 Audit[] deserializedAudits = audits.Deserialize(); // Get deserialized audits
 Audit creationAudit = audits.GetCreated(); // Get created audit
-Audit lastUpdatedAudit = audits.GetLastUpdated(); // Get last updated audit (except Deletion audit)
+Audit lastUpdatedAudit = audits.GetLast(includedDeleted: false); // Get last audit
 ```
 
----
-
-### Options
-
-`EntityFrameworkAuditProviderOptions`:
-
-| Option             | Type                                               | Description                                                 | Default            |
-|--------------------|----------------------------------------------------|-------------------------------------------------------------|--------------------|
-| `JsonOptions`      | `System.Text.Json.JsonSerializerOptions`           | Json serializer options to serialize and deserialize audits | An optimal setting |
-| `MaxStoredAudits`* | `int?`                                             | Maximum number of audits to store in `Audits` column        | `null`             |
-| `UserProvider`     | `Func<IServiceProvider, EntityFrameworkAuditUser>` | User provider to get current user id                        | `null`             |
-
-* If the number of audits exceeds this number, the earliest audits (except `Created`) will be removed from the column. If `null`, all audits will be stored.
 ---
 
 ### Output

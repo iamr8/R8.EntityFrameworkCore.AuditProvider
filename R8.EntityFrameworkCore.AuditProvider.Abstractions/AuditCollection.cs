@@ -2,8 +2,11 @@ using System.Text.Json;
 
 namespace R8.EntityFrameworkCore.AuditProvider.Abstractions
 {
-    public readonly struct AuditCollection
+    public class AuditCollection
     {
+        private Audit[]? _cachedDeserialized;
+        private bool _deserialized;
+
         /// <summary>
         /// Gets the underlying <see cref="JsonElement"/> of current instance.
         /// </summary>
@@ -15,17 +18,21 @@ namespace R8.EntityFrameworkCore.AuditProvider.Abstractions
         }
 
         /// <summary>
-        /// Returns last audit except <see cref="AuditFlag.Deleted"/> flag.
+        /// Returns last audit.
         /// </summary>
-        public Audit? GetLastUpdated()
+        public Audit? GetLast(bool includeDeleted = false)
         {
-            var json = this.Element.Deserialize<Audit[]>();
-            if (json != null && json.Length != 0)
+            this.Deserialize();
+
+            if (_deserialized && _cachedDeserialized is { Length: > 0 })
             {
-                var audit = json.Where(x => x.Flag != AuditFlag.Deleted).OrderByDescending(x => x.DateTime).FirstOrDefault();
-                if (audit != Audit.Empty)
+                var index = _cachedDeserialized.Length - 1;
+                while (index >= 0)
                 {
-                    return audit;
+                    var audit = _cachedDeserialized[index];
+                    if (audit != Audit.Empty && (includeDeleted || audit.Flag != AuditFlag.Deleted))
+                        return audit;
+                    index--;
                 }
             }
 
@@ -37,20 +44,26 @@ namespace R8.EntityFrameworkCore.AuditProvider.Abstractions
         /// </summary>
         public Audit? GetCreated()
         {
-            foreach (var audit in this.Element.EnumerateArray())
+            if (_deserialized && _cachedDeserialized is { Length: > 0 })
             {
-                var flag = (AuditFlag)audit.GetProperty(JsonNames.Audit.Flag).GetInt16();
-                if (flag == AuditFlag.Created)
-                    return audit.Deserialize<Audit>(AuditProviderConfiguration.JsonOptions);
+                foreach (var audit in _cachedDeserialized)
+                {
+                    if (audit.Flag == AuditFlag.Created)
+                        return audit;
+                }
+            }
+            else
+            {
+                foreach (var audit in this.Element.EnumerateArray())
+                {
+                    var flag = (AuditFlag)audit.GetProperty(JsonNames.Audit.Flag).GetInt16();
+                    if (flag == AuditFlag.Created)
+                        return audit.Deserialize<Audit>(AuditProviderConfiguration.JsonOptions);
+                }
             }
 
-            return null;
-        }
 
-        /// <inheritdoc cref="JsonElement.GetRawText()"/>
-        public string GetRawText()
-        {
-            return this.Element.GetRawText();
+            return null;
         }
 
         /// <summary>
@@ -59,26 +72,15 @@ namespace R8.EntityFrameworkCore.AuditProvider.Abstractions
         /// <returns></returns>
         public Audit[]? Deserialize()
         {
-            var audits = this.Element.Deserialize<Audit[]>(AuditProviderConfiguration.JsonOptions);
-            return audits;
+            if (_cachedDeserialized == null || _cachedDeserialized.Length == 0)
+            {
+                _cachedDeserialized = this.Element.Deserialize<Audit[]>(AuditProviderConfiguration.JsonOptions);
+                _deserialized = true;
+            }
+
+            return _cachedDeserialized;
         }
 
-        public AuditTimeline? GetTimeline(string tableName)
-        {
-            var audits = this.Deserialize();
-            if (audits == null || audits.Length == 0)
-                return null;
-            
-            var timeline = new AuditTimeline();
-            timeline.Append(tableName, audits);
-            return timeline;
-        }
-
-        public static explicit operator JsonElement(AuditCollection collection)
-        {
-            return collection.Element;
-        }
-    
         public static explicit operator AuditCollection(JsonElement element)
         {
             return new AuditCollection(element);
