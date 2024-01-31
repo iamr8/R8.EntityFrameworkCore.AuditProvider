@@ -54,8 +54,8 @@ If the number of audits exceeds this number, the earliest audits (except `Create
 #### Step 2:
 
 - Implement `IAuditable` (and `IAuditableDelete`) in your `Aggregate Auditable Entity` _(Or you can implement `IAuditable`/`IAuditableDelete` in your `Entity` directly)_:
-    - Example for `PostgreSQL`: [AggregateAuditable.cs](https://github.com/iamr8/R8.EntityFrameworkCore.AuditProvider/blob/master/R8.EntityFrameworkCore.AuditProvider.Tests/PostgreSqlTests/AggregateAuditable.cs)
-    - Example for `Microsoft Sql Server`: [AggregateAuditable.cs](https://github.com/iamr8/R8.EntityFrameworkCore.AuditProvider/blob/master/R8.EntityFrameworkCore.AuditProvider.Tests/MsSqlTests/AggregateAuditable.cs)
+    - Example for `PostgreSQL`: [AggregateAuditable.cs](https://github.com/iamr8/R8.EntityFrameworkCore.AuditProvider/blob/master/R8.EntityFrameworkCore.AuditProvider.Tests/PostgreSqlTests/Entities/AggregateAuditable.cs)
+    - Example for `Microsoft Sql Server`: [AggregateAuditable.cs](https://github.com/iamr8/R8.EntityFrameworkCore.AuditProvider/blob/master/R8.EntityFrameworkCore.AuditProvider.Tests/MsSqlTests/Entities/AggregateAuditable.cs)
 - then inherit your entity from `AggregateAuditable`:
 
 ---
