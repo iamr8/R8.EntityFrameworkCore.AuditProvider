@@ -5,11 +5,11 @@ using R8.EntityFrameworkCore.AuditProvider.Abstractions;
 
 namespace R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.Entities
 {
-    public abstract record AggregateAuditable : IAuditable, IAuditableDelete
+    public abstract record AggregateAuditable : IAuditActivator, IAuditStorage, IAuditSoftDelete
     {
         public bool IsDeleted { get; set; }
 
-        [Column(TypeName = "jsonb"), IgnoreAudit]
+        [Column(TypeName = "jsonb"), AuditIgnore]
         public JsonElement? Audits { get; set; }
     }
 }

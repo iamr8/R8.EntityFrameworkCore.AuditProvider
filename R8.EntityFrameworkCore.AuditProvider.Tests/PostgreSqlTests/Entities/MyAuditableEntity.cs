@@ -10,7 +10,7 @@ public record MyAuditableEntity : AggregateAuditable, IAggregateEntity
 {
     [Key] public int Id { get; set; }
     public string? Name { get; set; }
-    [IgnoreAudit] public string? LastName { get; set; }
+    [AuditIgnore] public string? LastName { get; set; }
     public List<int> ListOfIntegers { get; set; } = new();
     public List<string> ListOfStrings { get; set; } = new();
     public List<long>? NullableListOfLongs { get; set; } = new();

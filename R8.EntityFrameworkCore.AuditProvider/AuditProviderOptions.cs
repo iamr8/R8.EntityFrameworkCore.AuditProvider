@@ -25,13 +25,24 @@ namespace R8.EntityFrameworkCore.AuditProvider
         /// <summary>
         /// A <see cref="AuditFlag"/> value that represents included flags to be audited.
         /// </summary>
-        /// <remarks>Default value is <see cref="AuditFlag.Created"/>, <see cref="AuditFlag.Changed"/>, <see cref="AuditFlag.Deleted"/> and <see cref="AuditFlag.UnDeleted"/>.</remarks>
-        public IList<AuditFlag> IncludedFlags { get; } = new List<AuditFlag> { AuditFlag.Created, AuditFlag.Changed, AuditFlag.Deleted, AuditFlag.UnDeleted };
+        /// <remarks>Default: All flags are included.</remarks>
+        public AuditProviderFlagSupport AuditFlagSupport { get; } = new()
+        {
+            Created = AuditFlagState.ActionDate | AuditFlagState.Storage,
+            Changed = AuditFlagState.ActionDate | AuditFlagState.Storage,
+            Deleted = AuditFlagState.ActionDate | AuditFlagState.Storage,
+            UnDeleted = AuditFlagState.ActionDate | AuditFlagState.Storage,
+        };
         
         /// <summary>
         /// A <see cref="int"/> value that represents maximum number of audits to be stored. Audit with flag <see cref="AuditFlag.Created"/> remains as the first audit (if provided).
         /// </summary>
         public int? MaxStoredAudits { get; set; }
+        
+        /// <summary>
+        /// A <see cref="Func{TResult}"/> that represents a method to get current date time.
+        /// </summary>
+        public Func<IServiceProvider, DateTime>? DateTimeProvider { get; set; }
         
         /// <summary>
         /// A <see cref="Func{TResult}"/> that represents a method to get current user.

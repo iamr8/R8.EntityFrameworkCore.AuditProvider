@@ -1,29 +1,52 @@
-using System.Linq.Expressions;
-using System.Text.Json;
+using System.Collections;
+using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using R8.EntityFrameworkCore.AuditProvider.Abstractions;
 
 namespace R8.EntityFrameworkCore.AuditProvider.Tests;
 
 public static class Utils
 {
-    public static PropertyEntry<TEntity, TProperty> GetPropertyEntryWithNewValue<TDbContext, TEntity, TProperty>(this TDbContext dbContext, TEntity entity, Expression<Func<TEntity, TProperty>> propertyExpression, TProperty newValue) where TDbContext : DbContext where TEntity : class
+    public static ChangeTrackerMembers<TDbContext, TEntity> GetChangeTrackerMembers<TDbContext, TEntity>(this TEntity model, TDbContext dbContext) where TDbContext : DbContext where TEntity : class
     {
-        var propEntry = dbContext.Entry(entity).Property(propertyExpression);
-        propEntry.IsModified = true;
-        propEntry.OriginalValue = propertyExpression.Compile().Invoke(entity);
-        propEntry.CurrentValue = newValue;
-        entity.GetType().GetProperty(propertyExpression.GetMemberAccess().Name)!.SetValue(entity, newValue);
-        return propEntry;
-    }
+        var typeProperties = model.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance);
+        var entries = new MemberEntry[typeProperties.Length];
+        var entry = dbContext.Entry(model);
 
-    public static PropertyEntry<TEntity, TProperty> GetPropertyEntry<TDbContext, TEntity, TProperty>(this TDbContext dbContext, TEntity entity, Expression<Func<TEntity, TProperty>> propertyExpression) where TDbContext : DbContext where TEntity : class
-    {
-        var propEntry = dbContext.Entry(entity).Property(propertyExpression);
-        propEntry.OriginalValue = propertyExpression.Compile().Invoke(entity);
-        propEntry.CurrentValue = propEntry.OriginalValue;
-        return propEntry;
+        var entityType = dbContext.Model.FindEntityType(model.GetType());
+        var entityProps = entityType.GetProperties().ToArray();
+        var entityNavs = entityType.GetNavigations().ToArray();
+
+        for (var index = 0; index < typeProperties.Length; index++)
+        {
+            var property = typeProperties[index];
+            if (entityProps.Any(x => x.Name.Equals(property.Name)))
+            {
+                var propEntry = entry.Property(property.Name);
+                propEntry.IsModified = false;
+                propEntry.OriginalValue = property.GetValue(model);
+                propEntry.CurrentValue = propEntry.OriginalValue;
+                entries[index] = propEntry;
+            }
+            else if (entityNavs.Any(x => x.Name.Equals(property.Name)))
+            {
+                if (property.PropertyType.GetInterfaces().Any(x => x == typeof(IEnumerable)))
+                {
+                    var propEntry = entry.Collection(property.Name);
+                    propEntry.IsModified = false;
+                    propEntry.CurrentValue = (IEnumerable)property.GetValue(model)!;
+                    entries[index] = propEntry;
+                }
+                else
+                {
+                    var propEntry = entry.Reference(property.Name);
+                    propEntry.IsModified = false;
+                    propEntry.CurrentValue = property.GetValue(model);
+                    entries[index] = propEntry;
+                }
+            }
+        }
+
+        return new ChangeTrackerMembers<TDbContext, TEntity>(dbContext, model, entries);
     }
 }

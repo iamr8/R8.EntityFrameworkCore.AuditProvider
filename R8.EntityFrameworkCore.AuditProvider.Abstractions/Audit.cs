@@ -19,20 +19,20 @@ namespace R8.EntityFrameworkCore.AuditProvider.Abstractions
         /// Gets a flag that represents what happened to entity.
         /// </summary>
         [JsonPropertyName(JsonNames.Audit.Flag)]
-        public AuditFlag Flag { get; set; }
+        public AuditFlag Flag { get; init; }
 
         /// <summary>
         /// Gets the changes that made to entity.
         /// </summary>
         /// <remarks>This property only works when <see cref="Flag"/> is <see cref="AuditFlag.Changed"/></remarks>
         [JsonPropertyName(JsonNames.Audit.Changes)]
-        public AuditChange[]? Changes { get; set; }
+        public AuditChange[]? Changes { get; init; }
 
         /// <summary>
         /// Gets the user that made changes.
         /// </summary>
         [JsonPropertyName(JsonNames.Audit.User)]
-        public AuditUser? User { get; set; }
+        public AuditUser? User { get; init; }
 
         public static Audit Empty = new()
         {

@@ -9,6 +9,7 @@ using NSubstitute;
 using R8.EntityFrameworkCore.AuditProvider.Abstractions;
 using R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests;
 using R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.Entities;
+using R8.XunitLogger;
 using Xunit.Abstractions;
 
 namespace R8.EntityFrameworkCore.AuditProvider.Tests;
@@ -16,16 +17,18 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests;
 public class Audit_UnitTests
 {
     private readonly ITestOutputHelper _outputHelper;
+    private readonly ILoggerFactory _loggerFactory;
 
     public Audit_UnitTests(ITestOutputHelper outputHelper)
     {
         _outputHelper = outputHelper;
         AuditProviderConfiguration.JsonOptions = new AuditProviderOptions().JsonOptions;
+        _loggerFactory = new LoggerFactory().AddXunit(_outputHelper, o => o.MinimumLevel = LogLevel.Debug);
     }
-
+    
     public class MockingAuditEntityEntry : IEntityEntry
     {
-        public MockingAuditEntityEntry(EntityState state, object entity, IEnumerable<PropertyEntry> members)
+        public MockingAuditEntityEntry(EntityState state, object entity, IEnumerable<MemberEntry> members)
         {
             State = state;
             Entity = entity;
@@ -67,17 +70,15 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity();
         var entry = new MockingAuditEntityEntry(state, entity, Array.Empty<PropertyEntry>());
 
         var stopWatch = Stopwatch.StartNew();
-        var success = await interceptor.StoringAuditAsync(entry, dbContext);
+        await interceptor.AckAuditsAsync(entry, dbContext);
         stopWatch.Stop();
-
-        success.Should().BeFalse();
 
         _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
     }
@@ -88,22 +89,17 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo" };
-        var members = new List<PropertyEntry> { dbContext.GetPropertyEntry(entity, x => x.Name) };
+        var members = entity.GetChangeTrackerMembers(dbContext);
         var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
-        var success = await interceptor.StoringAuditAsync(entry, dbContext);
-        success.Should().BeTrue();
+        await interceptor.AckAuditsAsync(entry, dbContext);
 
-        var creationMembers = new List<PropertyEntry>
-        {
-            dbContext.GetPropertyEntryWithNewValue(entity, x => x.Name, "Bar"),
-        };
-        entry = new MockingAuditEntityEntry(EntityState.Modified, entity, creationMembers);
-        success = await interceptor.StoringAuditAsync(entry, dbContext);
-        success.Should().BeTrue();
+        members.Update(x => x.Name, "Bar");
+        entry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
+        await interceptor.AckAuditsAsync(entry, dbContext);
 
         entity.Audits.Should().NotBeNull();
         var auditCollection = (AuditCollection)entity.Audits.Value;
@@ -134,22 +130,18 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo" };
-        var members = new List<PropertyEntry> { dbContext.GetPropertyEntry(entity, x => x.Name) };
+        var members = entity.GetChangeTrackerMembers(dbContext);
         var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
-        var success = await interceptor.StoringAuditAsync(entry, dbContext);
-        success.Should().BeTrue();
+        await interceptor.AckAuditsAsync(entry, dbContext);
 
-        var creationMembers = new List<PropertyEntry>
-        {
-            dbContext.GetPropertyEntryWithNewValue(entity, x => x.Name, "Bar"),
-        };
-        entry = new MockingAuditEntityEntry(EntityState.Modified, entity, creationMembers);
-        success = await interceptor.StoringAuditAsync(entry, dbContext);
-        success.Should().BeTrue();
+        members.Update(x => x.Name, "Bar");
+        entry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
+        await interceptor.AckAuditsAsync(entry, dbContext);
+
 
         entity.Audits.Should().NotBeNull();
         var auditCollection = (AuditCollection)entity.Audits.Value;
@@ -171,23 +163,19 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        options.IncludedFlags.Remove(AuditFlag.Created);
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        options.AuditFlagSupport.Created = AuditFlagState.Excluded;
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo" };
-        var members = new List<PropertyEntry> { dbContext.GetPropertyEntry(entity, x => x.Name) };
+        var members = entity.GetChangeTrackerMembers(dbContext);
         var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
-        var success = await interceptor.StoringAuditAsync(entry, dbContext);
-        success.Should().BeFalse();
+        await interceptor.AckAuditsAsync(entry, dbContext);
+        
+        members.Update(x => x.Name, "Bar"); 
+        entry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
+        await interceptor.AckAuditsAsync(entry, dbContext);
 
-        var creationMembers = new List<PropertyEntry>
-        {
-            dbContext.GetPropertyEntryWithNewValue(entity, x => x.Name, "Bar"),
-        };
-        entry = new MockingAuditEntityEntry(EntityState.Modified, entity, creationMembers);
-        success = await interceptor.StoringAuditAsync(entry, dbContext);
-        success.Should().BeTrue();
 
         entity.Audits.Should().NotBeNull();
         var auditCollection = (AuditCollection)entity.Audits.Value;
@@ -203,22 +191,18 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo" };
-        var members = new List<PropertyEntry> { dbContext.GetPropertyEntry(entity, x => x.Name) };
+        var members = entity.GetChangeTrackerMembers(dbContext);
         var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
-        var success = await interceptor.StoringAuditAsync(entry, dbContext);
-        success.Should().BeTrue();
+        await interceptor.AckAuditsAsync(entry, dbContext);
+        
+        members.Update(x => x.Name, "Bar");
+        entry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
+        await interceptor.AckAuditsAsync(entry, dbContext);
 
-        var creationMembers = new List<PropertyEntry>
-        {
-            dbContext.GetPropertyEntryWithNewValue(entity, x => x.Name, "Bar"),
-        };
-        entry = new MockingAuditEntityEntry(EntityState.Modified, entity, creationMembers);
-        success = await interceptor.StoringAuditAsync(entry, dbContext);
-        success.Should().BeTrue();
 
         entity.Audits.Should().NotBeNull();
         var auditCollection = (AuditCollection)entity.Audits.Value;
@@ -237,24 +221,21 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo" };
-        var members = new List<PropertyEntry> { dbContext.GetPropertyEntry(entity, x => x.Name) };
+        var members = entity.GetChangeTrackerMembers(dbContext);
         var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
-        var success = await interceptor.StoringAuditAsync(entry, dbContext);
-        success.Should().BeTrue();
+        await interceptor.AckAuditsAsync(entry, dbContext);
 
-        members = new List<PropertyEntry> { dbContext.GetPropertyEntryWithNewValue(entity, x => x.Name, "Bar") };
+        members.Update(x => x.Name, "Bar");
         entry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
-        success = await interceptor.StoringAuditAsync(entry, dbContext);
-        success.Should().BeTrue();
-
-        members = new List<PropertyEntry> { dbContext.GetPropertyEntryWithNewValue(entity, x => x.IsDeleted, true) };
+        await interceptor.AckAuditsAsync(entry, dbContext);
+        
+        members.Update(x => x.IsDeleted, true);
         entry = new MockingAuditEntityEntry(EntityState.Deleted, entity, members);
-        success = await interceptor.StoringAuditAsync(entry, dbContext);
-        success.Should().BeTrue();
+        await interceptor.AckAuditsAsync(entry, dbContext);
 
         entity.Audits.Should().NotBeNull();
         var auditCollection = (AuditCollection)entity.Audits.Value;
@@ -273,24 +254,21 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo" };
-        var members = new List<PropertyEntry> { dbContext.GetPropertyEntry(entity, x => x.Name) };
+        var members = entity.GetChangeTrackerMembers(dbContext);
         var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
-        var success = await interceptor.StoringAuditAsync(entry, dbContext);
-        success.Should().BeTrue();
+        await interceptor.AckAuditsAsync(entry, dbContext);
 
-        members = new List<PropertyEntry> { dbContext.GetPropertyEntryWithNewValue(entity, x => x.Name, "Bar") };
+        members.Update(x => x.Name, "Bar");
         entry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
-        success = await interceptor.StoringAuditAsync(entry, dbContext);
-        success.Should().BeTrue();
-
-        members = new List<PropertyEntry> { dbContext.GetPropertyEntryWithNewValue(entity, x => x.IsDeleted, true) };
+        await interceptor.AckAuditsAsync(entry, dbContext);
+        
+        members.Update(x => x.IsDeleted, true);
         entry = new MockingAuditEntityEntry(EntityState.Deleted, entity, members);
-        success = await interceptor.StoringAuditAsync(entry, dbContext);
-        success.Should().BeTrue();
+        await interceptor.AckAuditsAsync(entry, dbContext);
 
         entity.Audits.Should().NotBeNull();
         var auditCollection = (AuditCollection)entity.Audits.Value;
@@ -308,19 +286,17 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        options.IncludedFlags.Remove(AuditFlag.Created);
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        options.AuditFlagSupport.Created = AuditFlagState.Excluded;
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo" };
-        var members = new List<PropertyEntry> { dbContext.GetPropertyEntry(entity, x => x.Name) };
+        var members = entity.GetChangeTrackerMembers(dbContext);
         var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
 
         var stopWatch = Stopwatch.StartNew();
-        var success = await interceptor.StoringAuditAsync(entry, dbContext);
+        await interceptor.AckAuditsAsync(entry, dbContext);
         stopWatch.Stop();
-
-        success.Should().BeFalse();
 
         entity.Audits.Should().BeNull();
 
@@ -333,18 +309,17 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo" };
-        var members = new List<PropertyEntry> { dbContext.GetPropertyEntry(entity, x => x.Name) };
+        var members = entity.GetChangeTrackerMembers(dbContext);
         var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
 
         var stopWatch = Stopwatch.StartNew();
-        var success = await interceptor.StoringAuditAsync(entry, dbContext);
+        await interceptor.AckAuditsAsync(entry, dbContext);
         stopWatch.Stop();
 
-        success.Should().BeTrue();
 
         entity.Audits.Should().NotBeNull();
         entity.Audits.Value.ValueKind.Should().Be(JsonValueKind.Array);
@@ -356,6 +331,41 @@ public class Audit_UnitTests
         var lastAudit = audits[0];
         lastAudit.Flag.Should().Be(AuditFlag.Created);
         lastAudit.Changes.Should().BeNullOrEmpty();
+
+        _outputHelper.WriteLine(entity.Audits.Value.GetRawText());
+        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
+    }
+
+    [Fact]
+    public async Task should_store_createdate_when_included()
+    {
+        var dbContext = CreateDbContext();
+
+        var options = new AuditProviderOptions();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
+
+        var entity = new MyAuditableEntityWithCreateDate { Name = "Foo" };
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
+
+        var stopWatch = Stopwatch.StartNew();
+        await interceptor.AckAuditsAsync(entry, dbContext);
+        stopWatch.Stop();
+
+        entity.Audits.Should().NotBeNull();
+        entity.Audits.Value.ValueKind.Should().Be(JsonValueKind.Array);
+
+        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
+        audits.Should().NotBeNull();
+        audits.Should().ContainSingle();
+
+        var lastAudit = audits[0];
+        lastAudit.Flag.Should().Be(AuditFlag.Created);
+        lastAudit.Changes.Should().BeNullOrEmpty();
+
+        entity.CreateDate.Should().NotBeNull();
+        entity.CreateDate.Should().Be(lastAudit.DateTime);
 
         _outputHelper.WriteLine(entity.Audits.Value.GetRawText());
         _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
@@ -375,18 +385,16 @@ public class Audit_UnitTests
             { "Phone", "+989364091209" }
         });
         var options = new AuditProviderOptions { UserProvider = sp => auditUser };
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo" };
-        var members = new List<PropertyEntry> { dbContext.GetPropertyEntry(entity, x => x.Name) };
+        var members = entity.GetChangeTrackerMembers(dbContext);
         var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
 
         var stopWatch = Stopwatch.StartNew();
-        var success = await interceptor.StoringAuditAsync(entry, dbContext);
+        await interceptor.AckAuditsAsync(entry, dbContext);
         stopWatch.Stop();
-
-        success.Should().BeTrue();
 
         entity.Audits.Should().NotBeNull();
         entity.Audits.Value.ValueKind.Should().Be(JsonValueKind.Array);
@@ -424,18 +432,17 @@ public class Audit_UnitTests
 
         var auditUser = new AuditProviderUser("1");
         var options = new AuditProviderOptions { UserProvider = sp => auditUser };
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo" };
-        var members = new List<PropertyEntry> { dbContext.GetPropertyEntry(entity, x => x.Name) };
+        var members = entity.GetChangeTrackerMembers(dbContext);
         var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
 
         var stopWatch = Stopwatch.StartNew();
-        var success = await interceptor.StoringAuditAsync(entry, dbContext);
+        await interceptor.AckAuditsAsync(entry, dbContext);
         stopWatch.Stop();
 
-        success.Should().BeTrue();
 
         entity.Audits.Should().NotBeNull();
         entity.Audits.Value.ValueKind.Should().Be(JsonValueKind.Array);
@@ -461,22 +468,19 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo" };
-        var members = new List<PropertyEntry>
-        {
-            dbContext.GetPropertyEntry(entity, x => x.Name),
-            dbContext.GetPropertyEntryWithNewValue(entity, x => x.IsDeleted, true)
-        };
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        members.Update(x => x.IsDeleted, true);
         var entry = new MockingAuditEntityEntry(EntityState.Deleted, entity, members);
 
         var stopWatch = Stopwatch.StartNew();
-        var success = await interceptor.StoringAuditAsync(entry, dbContext);
+        await interceptor.AckAuditsAsync(entry, dbContext);
         stopWatch.Stop();
 
-        success.Should().BeTrue();
+        entry.State.Should().Be(EntityState.Modified);
 
         entity.Audits.Should().NotBeNull();
         entity.Audits.Value.ValueKind.Should().Be(JsonValueKind.Array);
@@ -494,28 +498,145 @@ public class Audit_UnitTests
     }
 
     [Fact]
+    public async Task should_store_deletedate_when_included()
+    {
+        var dbContext = CreateDbContext();
+
+        var options = new AuditProviderOptions();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
+
+        var entity = new MyAuditableEntityWithDeleteDate { Name = "Foo" };
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        members.Update(x => x.IsDeleted, true);
+        var entry = new MockingAuditEntityEntry(EntityState.Deleted, entity, members);
+
+        var stopWatch = Stopwatch.StartNew();
+        await interceptor.AckAuditsAsync(entry, dbContext);
+        stopWatch.Stop();
+
+
+        entity.Audits.Should().NotBeNull();
+        entity.Audits.Value.ValueKind.Should().Be(JsonValueKind.Array);
+
+        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
+        audits.Should().NotBeNull();
+        audits.Should().ContainSingle();
+
+        entity.DeleteDate.Should().NotBeNull();
+        entity.DeleteDate.Should().Be(audits[0].DateTime);
+
+        var lastAudit = audits[0];
+        lastAudit.Flag.Should().Be(AuditFlag.Deleted);
+        lastAudit.Changes.Should().BeNullOrEmpty();
+
+        _outputHelper.WriteLine(entity.Audits.Value.GetRawText());
+        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
+    }
+
+    [Fact]
+    public async Task should_store_updatedate_when_updated_and_deletedate_included()
+    {
+        var dbContext = CreateDbContext();
+
+        var options = new AuditProviderOptions();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
+
+        var entity = new MyAuditableEntityWithUpdateDateAndDeleteDate
+        {
+            Name = "Foo",
+            DeleteDate = DateTime.UtcNow.AddDays(-1)
+        };
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        members.Update(x => x.Name, "Bar");
+        var entry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
+
+        var stopWatch = Stopwatch.StartNew();
+        await interceptor.AckAuditsAsync(entry, dbContext);
+        stopWatch.Stop();
+
+
+        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
+        audits.Should().NotBeNull();
+        audits.Should().ContainSingle();
+
+        var audit = audits[0];
+        audit.Flag.Should().Be(AuditFlag.Changed);
+        audit.Changes.Should().NotBeNullOrEmpty();
+        audit.Changes.Should().ContainSingle();
+
+        entity.DeleteDate.Should().BeNull();
+        entity.UpdateDate.Should().NotBeNull();
+        entity.UpdateDate.Should().Be(audits[0].DateTime);
+
+        var change = audit.Changes![0];
+        change.Column.Should().Be(nameof(MyAuditableEntityWithUpdateDate.Name));
+        change.OldValue.Value.GetRawText().Should().Be("\"Foo\"");
+        change.NewValue.Value.GetRawText().Should().Be("\"Bar\"");
+
+        _outputHelper.WriteLine(entity.Audits.Value.GetRawText());
+        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
+    }
+
+    [Fact]
+    public async Task should_store_updatedate_when_not_deleted_and_deletedate_included()
+    {
+        var dbContext = CreateDbContext();
+
+        var options = new AuditProviderOptions();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
+
+        var entity = new MyAuditableEntityWithUpdateDateAndDeleteDate
+        {
+            Name = "Foo",
+            IsDeleted = true,
+        };
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        members.Update(x => x.IsDeleted, false);
+        var entry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
+
+        var stopWatch = Stopwatch.StartNew();
+        await interceptor.AckAuditsAsync(entry, dbContext);
+        stopWatch.Stop();
+
+
+        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
+        audits.Should().NotBeNull();
+        audits.Should().ContainSingle();
+
+        var audit = audits[0];
+        audit.Flag.Should().Be(AuditFlag.UnDeleted);
+        audit.Changes.Should().BeNullOrEmpty();
+
+        entity.DeleteDate.Should().BeNull();
+        entity.UpdateDate.Should().NotBeNull();
+        entity.UpdateDate.Should().Be(audits[0].DateTime);
+
+        _outputHelper.WriteLine(entity.Audits.Value.GetRawText());
+        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
+    }
+
+    [Fact]
     public async Task should_not_store_deletion_when_excluded()
     {
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        options.IncludedFlags.Remove(AuditFlag.Deleted);
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        options.AuditFlagSupport.Deleted = AuditFlagState.Excluded;
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo" };
-        var members = new List<PropertyEntry>
-        {
-            dbContext.GetPropertyEntry(entity, x => x.Name),
-            dbContext.GetPropertyEntryWithNewValue(entity, x => x.IsDeleted, true)
-        };
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        members.Update(x => x.IsDeleted, true);
         var entry = new MockingAuditEntityEntry(EntityState.Deleted, entity, members);
 
         var stopWatch = Stopwatch.StartNew();
-        var success = await interceptor.StoringAuditAsync(entry, dbContext);
+        await interceptor.AckAuditsAsync(entry, dbContext);
         stopWatch.Stop();
 
-        success.Should().BeFalse();
 
         entity.Audits.Should().BeNull();
 
@@ -528,22 +649,17 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo", IsDeleted = true };
-        var members = new List<PropertyEntry>
-        {
-            dbContext.GetPropertyEntry(entity, x => x.Name),
-            dbContext.GetPropertyEntryWithNewValue(entity, x => x.IsDeleted, false)
-        };
-        var entry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
+        var propEntries = entity.GetChangeTrackerMembers(dbContext);
+        propEntries.Update(x => x.IsDeleted, false);
+        var entry = new MockingAuditEntityEntry(EntityState.Modified, entity, propEntries);
 
         var stopWatch = Stopwatch.StartNew();
-        var success = await interceptor.StoringAuditAsync(entry, dbContext);
+        await interceptor.AckAuditsAsync(entry, dbContext);
         stopWatch.Stop();
-
-        success.Should().BeTrue();
 
         entity.Audits.Should().NotBeNull();
         entity.Audits.Value.ValueKind.Should().Be(JsonValueKind.Array);
@@ -566,23 +682,19 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        options.IncludedFlags.Remove(AuditFlag.UnDeleted);
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        options.AuditFlagSupport.UnDeleted = AuditFlagState.Excluded;
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo", IsDeleted = true };
-        var members = new List<PropertyEntry>
-        {
-            dbContext.GetPropertyEntry(entity, x => x.Name),
-            dbContext.GetPropertyEntryWithNewValue(entity, x => x.IsDeleted, false)
-        };
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        members.Update(x => x.IsDeleted, false);
         var entry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
 
         var stopWatch = Stopwatch.StartNew();
-        var success = await interceptor.StoringAuditAsync(entry, dbContext);
+        await interceptor.AckAuditsAsync(entry, dbContext);
         stopWatch.Stop();
 
-        success.Should().BeFalse();
 
         entity.Audits.Should().BeNull();
 
@@ -595,20 +707,18 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo" };
 
-        var creationMembers = new List<PropertyEntry> { dbContext.GetPropertyEntry(entity, x => x.Name) };
-        var creationEntry = new MockingAuditEntityEntry(EntityState.Added, entity, creationMembers);
-        var success = await interceptor.StoringAuditAsync(creationEntry, dbContext);
-        success.Should().BeTrue();
-
-        var modificationMembers = new List<PropertyEntry> { dbContext.GetPropertyEntryWithNewValue(entity, x => x.Name, "Bar") };
-        var modificationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, modificationMembers);
-        success = await interceptor.StoringAuditAsync(modificationEntry, dbContext);
-        success.Should().BeTrue();
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        var creationEntry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
+        await interceptor.AckAuditsAsync(creationEntry, dbContext);
+        
+        members.Update(x => x.Name, "Bar");
+        var modificationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
+        await interceptor.AckAuditsAsync(modificationEntry, dbContext);
 
         var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
         audits.Should().NotBeNull();
@@ -636,7 +746,7 @@ public class Audit_UnitTests
         {
             MaxStoredAudits = 10
         };
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var mockingAudits = new Audit[]
@@ -688,7 +798,7 @@ public class Audit_UnitTests
         {
             MaxStoredAudits = 10
         };
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var mockingAudits = new Audit[]
@@ -739,7 +849,7 @@ public class Audit_UnitTests
         {
             MaxStoredAudits = 10
         };
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var mockingAudits = new Audit[]
@@ -789,7 +899,7 @@ public class Audit_UnitTests
         {
             MaxStoredAudits = 10
         };
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var mockingAudits = new Audit[]
@@ -835,7 +945,7 @@ public class Audit_UnitTests
         {
             MaxStoredAudits = 1
         };
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var mockingAudits = new Audit[]
@@ -864,18 +974,15 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo" };
-
-        var modificationMembers = new List<PropertyEntry>
-        {
-            dbContext.GetPropertyEntryWithNewValue(entity, x => x.Name, "Bar"),
-            dbContext.GetPropertyEntryWithNewValue(entity, x => x.IsDeleted, true)
-        };
-        var modificationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, modificationMembers);
-        await Assert.ThrowsAsync<NotSupportedException>(async () => await interceptor.StoringAuditAsync(modificationEntry, dbContext));
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        members.Update(x => x.Name, "Bar");
+        members.Update(x => x.IsDeleted, true);
+        var modificationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
+        await Assert.ThrowsAsync<NotSupportedException>(async () => await interceptor.AckAuditsAsync(modificationEntry, dbContext));
     }
 
     [Fact]
@@ -884,18 +991,15 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo", IsDeleted = true };
-
-        var modificationMembers = new List<PropertyEntry>
-        {
-            dbContext.GetPropertyEntryWithNewValue(entity, x => x.Name, "Bar"),
-            dbContext.GetPropertyEntryWithNewValue(entity, x => x.IsDeleted, false)
-        };
-        var modificationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, modificationMembers);
-        await Assert.ThrowsAsync<NotSupportedException>(async () => await interceptor.StoringAuditAsync(modificationEntry, dbContext));
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        members.Update(x => x.Name, "Bar");
+        members.Update(x => x.IsDeleted, false);
+        var modificationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
+        await Assert.ThrowsAsync<NotSupportedException>(async () => await interceptor.AckAuditsAsync(modificationEntry, dbContext));
     }
 
     [Fact]
@@ -904,15 +1008,13 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo" };
-
-        var modificationMembers = new List<PropertyEntry> { dbContext.GetPropertyEntry(entity, x => x.Name) };
-        var modificationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, modificationMembers);
-        var success = await interceptor.StoringAuditAsync(modificationEntry, dbContext);
-        success.Should().BeFalse();
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        var modificationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
+        await interceptor.AckAuditsAsync(modificationEntry, dbContext);
     }
 
     [Fact]
@@ -921,15 +1023,14 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo" };
-
-        var modificationMembers = new List<PropertyEntry> { dbContext.GetPropertyEntryWithNewValue(entity, x => x.Name, "Foo") };
-        var modificationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, modificationMembers);
-        var success = await interceptor.StoringAuditAsync(modificationEntry, dbContext);
-        success.Should().BeFalse();
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        members.Update(x => x.Name, "Foo");
+        var modificationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
+        await interceptor.AckAuditsAsync(modificationEntry, dbContext);
     }
 
     [Fact]
@@ -938,15 +1039,14 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { LastName = "Foo" };
-
-        var modificationMembers = new List<PropertyEntry> { dbContext.GetPropertyEntryWithNewValue(entity, x => x.LastName, "Bar") };
-        var modificationEntry = new Audit_UnitTests.MockingAuditEntityEntry(EntityState.Modified, entity, modificationMembers);
-        var success = await interceptor.StoringAuditAsync(modificationEntry, dbContext);
-        success.Should().BeFalse();
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        members.Update(x => x.LastName, "Bar");
+        var modificationEntry = new Audit_UnitTests.MockingAuditEntityEntry(EntityState.Modified, entity, members);
+        await interceptor.AckAuditsAsync(modificationEntry, dbContext);
     }
 
     [Fact]
@@ -955,21 +1055,18 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo", LastName = "Foo" };
-
-        var modificationMembers = new List<PropertyEntry>
-        {
-            dbContext.GetPropertyEntryWithNewValue(entity, x => x.Name, "Bar"),
-            dbContext.GetPropertyEntryWithNewValue(entity, x => x.LastName, "Bar")
-        };
-        var modificationEntry = new Audit_UnitTests.MockingAuditEntityEntry(EntityState.Modified, entity, modificationMembers);
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        members.Update(x => x.Name, "Bar");
+        members.Update(x => x.LastName, "Bar");
+        var modificationEntry = new Audit_UnitTests.MockingAuditEntityEntry(EntityState.Modified, entity, members);
         var stopWatch = Stopwatch.StartNew();
-        var success = await interceptor.StoringAuditAsync(modificationEntry, dbContext);
+        await interceptor.AckAuditsAsync(modificationEntry, dbContext);
         stopWatch.Stop();
-        success.Should().BeTrue();
+
 
         var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
         audits.Should().NotBeNull();
@@ -988,22 +1085,43 @@ public class Audit_UnitTests
     }
 
     [Fact]
-    public async Task should_delete_permanently_when_entity_is_not_auditable_on_deletion()
+    public async Task should_delete_permanently_when_entity_is_not_AuditSoftDelete()
     {
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyEntity();
-
-        var modificationMembers = new List<PropertyEntry> { dbContext.GetPropertyEntry(entity, x => x.Name) };
-        var modificationEntry = new Audit_UnitTests.MockingAuditEntityEntry(EntityState.Deleted, entity, modificationMembers);
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        var modificationEntry = new Audit_UnitTests.MockingAuditEntityEntry(EntityState.Deleted, entity, members);
         var stopWatch = Stopwatch.StartNew();
-        var success = await interceptor.StoringAuditAsync(modificationEntry, dbContext);
+        await interceptor.AckAuditsAsync(modificationEntry, dbContext);
         stopWatch.Stop();
-        success.Should().BeFalse();
+
+        modificationEntry.State.Should().Be(EntityState.Deleted);
+
+        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
+    }
+
+    [Fact]
+    public async Task should_delete_permanently_when_entity_is_AuditSoftDelete_but_AuditActivator_excluded()
+    {
+        var dbContext = CreateDbContext();
+
+        var options = new AuditProviderOptions();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
+
+        var entity = new MyAuditableEntityWithSoftDeleteWithoutActivator();
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        var modificationEntry = new Audit_UnitTests.MockingAuditEntityEntry(EntityState.Deleted, entity, members);
+        var stopWatch = Stopwatch.StartNew();
+        await interceptor.AckAuditsAsync(modificationEntry, dbContext);
+        stopWatch.Stop();
+
+        modificationEntry.State.Should().Be(EntityState.Deleted);
 
         _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
     }
@@ -1014,17 +1132,16 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntityWithoutSoftDelete();
-
-        var modificationMembers = new List<PropertyEntry> { dbContext.GetPropertyEntry(entity, x => x.Name) };
-        var modificationEntry = new Audit_UnitTests.MockingAuditEntityEntry(EntityState.Deleted, entity, modificationMembers);
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        var modificationEntry = new Audit_UnitTests.MockingAuditEntityEntry(EntityState.Deleted, entity, members);
         var stopWatch = Stopwatch.StartNew();
-        var success = await interceptor.StoringAuditAsync(modificationEntry, dbContext);
+        await interceptor.AckAuditsAsync(modificationEntry, dbContext);
         stopWatch.Stop();
-        success.Should().BeFalse();
+
 
         _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
     }
@@ -1035,17 +1152,17 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyEntity { Name = "Foo" };
-
-        var modificationMembers = new List<PropertyEntry> { dbContext.GetPropertyEntryWithNewValue(entity, x => x.Name, "Bar") };
-        var modificationEntry = new Audit_UnitTests.MockingAuditEntityEntry(EntityState.Modified, entity, modificationMembers);
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        members.Update(x => x.Name, "Bar");
+        var modificationEntry = new Audit_UnitTests.MockingAuditEntityEntry(EntityState.Modified, entity, members);
         var stopWatch = Stopwatch.StartNew();
-        var success = await interceptor.StoringAuditAsync(modificationEntry, dbContext);
+        await interceptor.AckAuditsAsync(modificationEntry, dbContext);
         stopWatch.Stop();
-        success.Should().BeFalse();
+
 
         _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
     }
@@ -1056,20 +1173,18 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Name = "Foo" };
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        members.Update(x => x.Name, "Bar");
+        var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
+        await interceptor.AckAuditsAsync(creationEntry, dbContext);
 
-        var creationMembers = new List<PropertyEntry> { dbContext.GetPropertyEntryWithNewValue(entity, x => x.Name, "Bar") };
-        var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, creationMembers);
-        var success = await interceptor.StoringAuditAsync(creationEntry, dbContext);
-        success.Should().BeTrue();
-
-        var modificationMembers = new List<PropertyEntry> { dbContext.GetPropertyEntryWithNewValue(entity, x => x.Name, "Foo") };
-        var modificationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, modificationMembers);
-        success = await interceptor.StoringAuditAsync(modificationEntry, dbContext);
-        success.Should().BeTrue();
+        members.Update(x => x.Name, "Foo");
+        var modificationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
+        await interceptor.AckAuditsAsync(modificationEntry, dbContext);
 
         var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
         audits.Should().NotBeNull();
@@ -1100,17 +1215,16 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { Payload = JsonDocument.Parse(@"[{""name"": ""arash""}]") };
-
-        var creationMembers = new List<PropertyEntry> { dbContext.GetPropertyEntryWithNewValue(entity, x => x.Payload, JsonDocument.Parse(@"[{""name"": ""abood""}]")) };
-        var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, creationMembers);
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        members.Update(x => x.Payload, JsonDocument.Parse(@"[{""name"": ""abood""}]"));
+        var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
         var stopWatch = Stopwatch.StartNew();
-        var success = await interceptor.StoringAuditAsync(creationEntry, dbContext);
+        await interceptor.AckAuditsAsync(creationEntry, dbContext);
         stopWatch.Stop();
-        success.Should().BeTrue();
 
         var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
         audits.Should().NotBeNull();
@@ -1134,7 +1248,7 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity
@@ -1142,17 +1256,14 @@ public class Audit_UnitTests
             Date = new DateTime(2021, 1, 1, 1, 1, 1, DateTimeKind.Utc),
             DateOffset = new DateTimeOffset(2021, 1, 1, 1, 1, 1, TimeSpan.FromHours(3))
         };
-
-        var creationMembers = new List<PropertyEntry>
-        {
-            dbContext.GetPropertyEntryWithNewValue(entity, x => x.Date, new DateTime(2022, 1, 1, 1, 1, 1, DateTimeKind.Utc)),
-            dbContext.GetPropertyEntryWithNewValue(entity, x => x.DateOffset, new DateTimeOffset(2022, 1, 1, 1, 1, 1, TimeSpan.FromHours(3)))
-        };
-        var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, creationMembers);
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        members.Update(x => x.Date, new DateTime(2022, 1, 1, 1, 1, 1, DateTimeKind.Utc));
+        members.Update(x => x.DateOffset, new DateTimeOffset(2022, 1, 1, 1, 1, 1, TimeSpan.FromHours(3)));
+        var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
         var stopWatch = Stopwatch.StartNew();
-        var success = await interceptor.StoringAuditAsync(creationEntry, dbContext);
+        await interceptor.AckAuditsAsync(creationEntry, dbContext);
         stopWatch.Stop();
-        success.Should().BeTrue();
+
 
         var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
         audits.Should().NotBeNull();
@@ -1195,17 +1306,17 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { NullableInt = 3 };
-
-        var creationMembers = new List<PropertyEntry> { dbContext.GetPropertyEntryWithNewValue(entity, x => x.NullableInt, null) };
-        var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, creationMembers);
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        members.Update(x => x.NullableInt, null);
+        var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
         var stopWatch = Stopwatch.StartNew();
-        var success = await interceptor.StoringAuditAsync(creationEntry, dbContext);
+        await interceptor.AckAuditsAsync(creationEntry, dbContext);
         stopWatch.Stop();
-        success.Should().BeTrue();
+
 
         var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
         audits.Should().NotBeNull();
@@ -1230,17 +1341,17 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity { NullableInt = null };
-
-        var creationMembers = new List<PropertyEntry> { dbContext.GetPropertyEntryWithNewValue(entity, x => x.NullableInt, 3) };
-        var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, creationMembers);
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        members.Update(x => x.NullableInt, 3);
+        var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
         var stopWatch = Stopwatch.StartNew();
-        var success = await interceptor.StoringAuditAsync(creationEntry, dbContext);
+        await interceptor.AckAuditsAsync(creationEntry, dbContext);
         stopWatch.Stop();
-        success.Should().BeTrue();
+
 
         var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
         audits.Should().NotBeNull();
@@ -1260,12 +1371,51 @@ public class Audit_UnitTests
     }
 
     [Fact]
+    public async Task should_store_updatedate_when_included()
+    {
+        var dbContext = CreateDbContext();
+
+        var options = new AuditProviderOptions();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
+
+        var entity = new MyAuditableEntityWithUpdateDate { Name = null };
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        members.Update(x => x.Name, "iamr8");
+        var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
+        var stopWatch = Stopwatch.StartNew();
+        await interceptor.AckAuditsAsync(creationEntry, dbContext);
+        stopWatch.Stop();
+
+
+        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
+        audits.Should().NotBeNull();
+        audits.Should().ContainSingle();
+
+        var audit = audits[0];
+        audit.Flag.Should().Be(AuditFlag.Changed);
+        audit.Changes.Should().NotBeNullOrEmpty();
+        audit.Changes.Should().ContainSingle();
+
+        entity.UpdateDate.Should().NotBeNull();
+        entity.UpdateDate.Should().Be(audit.DateTime);
+
+        var change = audit.Changes![0];
+        change.Column.Should().Be(nameof(MyAuditableEntityWithUpdateDate.Name));
+        change.OldValue.HasValue.Should().BeFalse();
+        change.NewValue.Value.GetRawText().Should().Be("\"iamr8\"");
+
+        _outputHelper.WriteLine(entity.Audits.Value.GetRawText());
+        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
+    }
+
+    [Fact]
     public async Task should_store_changes_of_list_types()
     {
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity
@@ -1274,18 +1424,15 @@ public class Audit_UnitTests
             ArrayOfDoubles = new[] { 1.1, 2.2 },
             ListOfIntegers = new List<int> { 1, 2 }
         };
-
-        var creationMembers = new List<PropertyEntry>
-        {
-            dbContext.GetPropertyEntryWithNewValue(entity, x => x.ListOfStrings, new List<string> { "Foo", "Bar", "Baz" }),
-            dbContext.GetPropertyEntryWithNewValue(entity, x => x.ArrayOfDoubles, new[] { 1.1, 2.2, 3.3 }),
-            dbContext.GetPropertyEntryWithNewValue(entity, x => x.ListOfIntegers, new List<int> { 1, 2, 3 })
-        };
-        var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, creationMembers);
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        members.Update(x => x.ListOfStrings, new List<string> { "Foo", "Bar", "Baz" });
+        members.Update(x => x.ArrayOfDoubles, new[] { 1.1, 2.2, 3.3 });
+        members.Update(x => x.ListOfIntegers, new List<int> { 1, 2, 3 });
+        var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
         var stopWatch = Stopwatch.StartNew();
-        var success = await interceptor.StoringAuditAsync(creationEntry, dbContext);
+        await interceptor.AckAuditsAsync(creationEntry, dbContext);
         stopWatch.Stop();
-        success.Should().BeTrue();
+
 
         var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
         audits.Should().NotBeNull();
@@ -1298,30 +1445,56 @@ public class Audit_UnitTests
         for (var i = 0; i < audit.Changes!.Length; i++)
         {
             var change = audit.Changes[i];
-            change.Column.Should().Be(i switch
+            switch (change.Column)
             {
-                0 => nameof(MyAuditableEntity.ListOfStrings),
-                1 => nameof(MyAuditableEntity.ArrayOfDoubles),
-                2 => nameof(MyAuditableEntity.ListOfIntegers),
-                _ => throw new ArgumentOutOfRangeException()
-            });
-            change.OldValue.Value.GetRawText().Should().Be(i switch
-            {
-                0 => @"[""Foo"",""Bar""]",
-                1 => @"[1.1,2.2]",
-                2 => @"[1,2]",
-                _ => throw new ArgumentOutOfRangeException()
-            });
-            change.NewValue.Value.GetRawText().Should().Be(i switch
-            {
-                0 => @"[""Foo"",""Bar"",""Baz""]",
-                1 => @"[1.1,2.2,3.3]",
-                2 => @"[1,2,3]",
-                _ => throw new ArgumentOutOfRangeException()
-            });
+                case nameof(MyAuditableEntity.ListOfStrings):
+                    change.OldValue.Value.GetRawText().Should().Be(@"[""Foo"",""Bar""]");
+                    change.NewValue.Value.GetRawText().Should().Be(@"[""Foo"",""Bar"",""Baz""]");
+                    break;
+                case nameof(MyAuditableEntity.ArrayOfDoubles):
+                    change.OldValue.Value.GetRawText().Should().Be(@"[1.1,2.2]");
+                    change.NewValue.Value.GetRawText().Should().Be(@"[1.1,2.2,3.3]");
+                    break;
+                case nameof(MyAuditableEntity.ListOfIntegers):
+                    change.OldValue.Value.GetRawText().Should().Be(@"[1,2]");
+                    change.NewValue.Value.GetRawText().Should().Be(@"[1,2,3]");
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
         }
 
         _outputHelper.WriteLine(entity.Audits.Value.GetRawText());
+        _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
+    }
+
+    [Fact]
+    public async Task should_store_updatedate_while_auditstorage_excluded()
+    {
+        var dbContext = CreateDbContext();
+
+        var dt = DateTime.UtcNow.AddDays(-1);
+        var options = new AuditProviderOptions
+        {
+            DateTimeProvider = _ => dt
+        };
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
+
+        var entity = new MyAuditableEntityWithoutAuditStorage
+        {
+            Name = "Foo",
+        };
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        members.Update(x => x.Name, "Bar");
+        var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
+        var stopWatch = Stopwatch.StartNew();
+        await interceptor.AckAuditsAsync(creationEntry, dbContext);
+        stopWatch.Stop();
+
+        entity.UpdateDate.Should().NotBeNull();
+        entity.UpdateDate.Should().BeCloseTo(dt, TimeSpan.FromMilliseconds(100));
+
         _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
     }
 
@@ -1331,8 +1504,8 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        options.IncludedFlags.Remove(AuditFlag.Changed);
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        options.AuditFlagSupport.Changed = AuditFlagState.Excluded;
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity
@@ -1341,18 +1514,15 @@ public class Audit_UnitTests
             ArrayOfDoubles = new[] { 1.1, 2.2 },
             ListOfIntegers = new List<int> { 1, 2 }
         };
-
-        var creationMembers = new List<PropertyEntry>
-        {
-            dbContext.GetPropertyEntryWithNewValue(entity, x => x.ListOfStrings, new List<string> { "Foo", "Bar", "Baz" }),
-            dbContext.GetPropertyEntryWithNewValue(entity, x => x.ArrayOfDoubles, new[] { 1.1, 2.2, 3.3 }),
-            dbContext.GetPropertyEntryWithNewValue(entity, x => x.ListOfIntegers, new List<int> { 1, 2, 3 })
-        };
-        var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, creationMembers);
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        members.Update(x => x.ListOfStrings, new List<string> { "Foo", "Bar", "Baz" });
+        members.Update(x => x.ArrayOfDoubles, new[] { 1.1, 2.2, 3.3 });
+        members.Update(x => x.ListOfIntegers, new List<int> { 1, 2, 3 });
+        var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
         var stopWatch = Stopwatch.StartNew();
-        var success = await interceptor.StoringAuditAsync(creationEntry, dbContext);
+        await interceptor.AckAuditsAsync(creationEntry, dbContext);
         stopWatch.Stop();
-        success.Should().BeFalse();
+
 
         entity.Audits.Should().BeNull();
 
@@ -1365,7 +1535,7 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity
@@ -1374,18 +1544,12 @@ public class Audit_UnitTests
             ArrayOfDoubles = Array.Empty<double>(),
             ListOfIntegers = new List<int>()
         };
-
-        var creationMembers = new List<PropertyEntry>
-        {
-            dbContext.GetPropertyEntry(entity, x => x.ListOfStrings),
-            dbContext.GetPropertyEntry(entity, x => x.ArrayOfDoubles),
-            dbContext.GetPropertyEntry(entity, x => x.ListOfIntegers)
-        };
-        var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, creationMembers);
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
         var stopWatch = Stopwatch.StartNew();
-        var success = await interceptor.StoringAuditAsync(creationEntry, dbContext);
+        await interceptor.AckAuditsAsync(creationEntry, dbContext);
         stopWatch.Stop();
-        success.Should().BeFalse();
+
 
         _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
     }
@@ -1396,23 +1560,19 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity
         {
             NullableListOfLongs = null
         };
-
-        var creationMembers = new List<PropertyEntry>
-        {
-            dbContext.GetPropertyEntryWithNewValue(entity, x => x.NullableListOfLongs, new List<long> { 1, 2, 3 })
-        };
-        var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, creationMembers);
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        members.Update(x => x.NullableListOfLongs, new List<long> { 1, 2, 3 });
+        var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
         var stopWatch = Stopwatch.StartNew();
-        var success = await interceptor.StoringAuditAsync(creationEntry, dbContext);
+        await interceptor.AckAuditsAsync(creationEntry, dbContext);
         stopWatch.Stop();
-        success.Should().BeTrue();
 
         var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
         audits.Should().NotBeNull();
@@ -1440,23 +1600,20 @@ public class Audit_UnitTests
         var dbContext = CreateDbContext();
 
         var options = new AuditProviderOptions();
-        var logger = new LoggerFactory().CreateLogger<EntityFrameworkAuditProviderInterceptor>();
+        var logger = _loggerFactory.CreateLogger<EntityFrameworkAuditProviderInterceptor>();
         var interceptor = new EntityFrameworkAuditProviderInterceptor(options, CreateServiceProvider(), logger);
 
         var entity = new MyAuditableEntity
         {
             Double = 0
         };
-
-        var creationMembers = new List<PropertyEntry>
-        {
-            dbContext.GetPropertyEntryWithNewValue(entity, x => x.Double, 5)
-        };
-        var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, creationMembers);
+        var members = entity.GetChangeTrackerMembers(dbContext);
+        members.Update(x => x.Double, 5);
+        var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
         var stopWatch = Stopwatch.StartNew();
-        var success = await interceptor.StoringAuditAsync(creationEntry, dbContext);
+        await interceptor.AckAuditsAsync(creationEntry, dbContext);
         stopWatch.Stop();
-        success.Should().BeTrue();
+
 
         var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
         audits.Should().NotBeNull();

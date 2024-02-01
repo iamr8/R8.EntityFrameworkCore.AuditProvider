@@ -3,12 +3,12 @@
 namespace R8.EntityFrameworkCore.AuditProvider.Abstractions
 {
     /// <summary>
-    /// An <see cref="IAuditable"/> interface that represents an entity that is auditable.
+    /// An <see cref="IAuditStorage"/> interface that represents an a column to store audits.
     /// </summary>
-    public interface IAuditable
+    public interface IAuditStorage
     {
         /// <summary>
-        /// Gets or sets the Audit `JSON` data for this record.
+        /// Gets the Audit `JSON` data for this record.
         /// </summary>
         JsonElement? Audits { get; set; }
     }

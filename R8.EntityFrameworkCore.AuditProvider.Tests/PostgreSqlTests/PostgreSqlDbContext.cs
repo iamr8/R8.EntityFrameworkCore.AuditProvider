@@ -12,6 +12,13 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests
         public virtual DbSet<MyAuditableEntity> MyAuditableEntities { get; set; }
         public virtual DbSet<MyEntity> MyEntities { get; set; }
         public virtual DbSet<MyAuditableEntityWithoutSoftDelete> MyAuditableEntitiesWithoutSoftDelete { get; set; }
+        public virtual DbSet<MyAuditableEntityWithCreateDate> MyAuditableEntitiesWithCreateDate { get; set; }
+        public virtual DbSet<MyAuditableEntityWithUpdateDate> MyAuditableEntitiesWithUpdateDate { get; set; }
+        public virtual DbSet<MyAuditableEntityWithDeleteDate> MyAuditableEntitiesWithDeleteDate { get; set; }
+        public virtual DbSet<MyAuditableEntityWithUpdateDateAndDeleteDate> MyAuditableEntitiesWithUpdateDateAndDeleteDate { get; set; }
+        public virtual DbSet<MyFullAuditableEntity> MyFullAuditableEntities { get; set; }
+        public virtual DbSet<MyAuditableEntityWithoutAuditStorage> MyAuditableEntitiesWithoutAuditStorage { get; set; }
+        public virtual DbSet<MyAuditableEntityWithSoftDeleteWithoutActivator> MyAuditableEntitiesWithSoftDeleteWithoutActivator { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

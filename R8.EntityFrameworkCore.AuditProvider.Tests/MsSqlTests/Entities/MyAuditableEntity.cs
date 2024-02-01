@@ -9,7 +9,7 @@ public record MyAuditableEntity : AggregateAuditable, IAggregateEntity
 {
     [Key] public int Id { get; set; }
     public string? Name { get; set; }
-    [IgnoreAudit] public string? LastName { get; set; }
+    [AuditIgnore] public string? LastName { get; set; }
     public double Double { get; set; }
     public DateTime Date { get; set; }
     public DateTimeOffset DateOffset { get; set; }

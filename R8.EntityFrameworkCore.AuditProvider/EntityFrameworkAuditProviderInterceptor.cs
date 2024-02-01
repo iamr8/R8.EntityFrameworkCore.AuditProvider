@@ -19,7 +19,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
     {
         private readonly AuditProviderOptions _options;
         private readonly IServiceProvider _serviceProvider;
-        
+
         private readonly ILogger<EntityFrameworkAuditProviderInterceptor> _logger;
 
         public EntityFrameworkAuditProviderInterceptor(AuditProviderOptions options, IServiceProvider serviceProvider, ILogger<EntityFrameworkAuditProviderInterceptor> logger)
@@ -39,7 +39,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
                 {
                     var entry = enumerator.Current;
                     var auditEntry = new AuditEntityEntry(entry);
-                    var audit = await StoringAuditAsync(auditEntry, eventData.Context, cancellationToken).ConfigureAwait(false);
+                    await AckAuditsAsync(auditEntry, eventData.Context, cancellationToken).ConfigureAwait(false);
                 }
             }
 
@@ -47,56 +47,31 @@ namespace R8.EntityFrameworkCore.AuditProvider
         }
 
         [DebuggerStepThrough]
-        internal async ValueTask<bool> StoringAuditAsync(IEntityEntry entry, DbContext? dbContext, CancellationToken cancellationToken = default)
+        internal async ValueTask AckAuditsAsync(IEntityEntry entry, DbContext? dbContext, CancellationToken cancellationToken = default)
         {
             if (entry.State is not (EntityState.Added or EntityState.Deleted or EntityState.Modified))
-                return false;
+                return;
 
             using var logScope = _logger.BeginScope("Storing audit for {EntityName} with state {EntityState}", entry.EntityType.Name, entry.State);
             var propertyEntries = entry.Members.OfType<PropertyEntry>().ToArray();
-            if (propertyEntries.Length == 0)
-            {
-                // Unreachable code
-                _logger.LogDebug(AuditEventId.NoChangesFound, "Entity {EntityName} with state {EntityState} has no changes", entry.EntityType.Name, entry.State);
-                return false;
-            }
-
             var entity = entry.Entity;
-            if (entity is IAuditableDelete entitySoftDelete)
-            {
-                if (entry.State == EntityState.Deleted)
-                {
-                    // Set deleted flag
-                    await entry.ReloadAsync(cancellationToken).ConfigureAwait(false);
-                    entitySoftDelete.IsDeleted = true;
-                    entry.DetectChanges();
-                    entry.State = EntityState.Modified;
-                }
-            }
-            else
-            {
-                if (entry.State == EntityState.Deleted)
-                {
-                    // Delete permanently
-                    _logger.LogDebug(AuditEventId.NotAuditableDelete, "Entity {EntityName} with state {EntityState} does not implemented by {AuditableDelete}. So it will be deleted permanently", entry.EntityType.Name, entry.State, nameof(IAuditableDelete));
-                    return false;
-                }
-            }
+            if (entity is not IAuditActivator auditActivator)
+                return;
 
-            if (entity is not IAuditable entityAuditable)
-            {
-                _logger.LogDebug(AuditEventId.NotAuditable, "Entity {EntityName} with state {EntityState} does not implemented by {Auditable}. So it will be ignored while is not auditable", entry.EntityType.Name, entry.State, nameof(IAuditable));
-                return false;
-            }
+            var currentDateTime = _options.DateTimeProvider?.Invoke(_serviceProvider) ?? DateTime.UtcNow;
 
-            var audit = new Audit { DateTime = DateTime.UtcNow };
+            var hasStorage = auditActivator is IAuditStorage;
+            AuditUser? auditUser = null;
+            AuditFlag? auditFlag = null;
+            var finalChanges = Memory<AuditChange>.Empty;
+            var canStore = hasStorage;
 
-            if (dbContext != null && _options.UserProvider != null)
+            if (dbContext != null && _options.UserProvider != null && hasStorage)
             {
                 var user = _options.UserProvider.Invoke(_serviceProvider);
                 if (user != null)
                 {
-                    audit.User = new AuditUser
+                    auditUser = new AuditUser
                     {
                         UserId = user.UserId,
                         AdditionalData = user.AdditionalData,
@@ -106,44 +81,43 @@ namespace R8.EntityFrameworkCore.AuditProvider
 
             switch (entry.State)
             {
+                case EntityState.Deleted:
+                {
+                    if (auditActivator is IAuditSoftDelete entitySoftDelete)
+                    {
+                        if (entry.State == EntityState.Deleted)
+                        {
+                            if (propertyEntries.Any(c => c.Metadata.Name.Equals(nameof(IAuditSoftDelete.IsDeleted), StringComparison.Ordinal) && ((bool)c.OriginalValue) == true))
+                                return;
+
+                            // Set deleted flag
+                            await entry.ReloadAsync(cancellationToken).ConfigureAwait(false);
+                            entitySoftDelete.IsDeleted = true;
+                            entry.DetectChanges();
+                            entry.State = EntityState.Modified;
+
+                            PerformDeleteUndelete(entry, auditActivator, deleted: true, ref auditFlag, ref canStore, hasStorage, currentDateTime);
+                        }
+                    }
+
+                    break;
+                }
                 case EntityState.Modified:
                 {
-                    var (deleted, changes) = GetChangedPropertyEntries(propertyEntries);
+                    var (deleted, changes) = GetChangedPropertyEntries(propertyEntries, hasStorage);
                     if (deleted.HasValue)
                     {
                         if (changes.Length > 0)
                             throw new NotSupportedException("Cannot delete/undelete and update at the same time.");
 
-                        audit.Flag = deleted.Value switch
-                        {
-                            false => AuditFlag.UnDeleted,
-                            true => AuditFlag.Deleted,
-                        };
+                        if (auditActivator is IAuditSoftDelete softDelete)
+                            softDelete.IsDeleted = deleted.Value;
 
-                        switch (audit.Flag)
-                        {
-                            case AuditFlag.Deleted when !_options.IncludedFlags.Contains(AuditFlag.Deleted):
-                            case AuditFlag.UnDeleted when !_options.IncludedFlags.Contains(AuditFlag.UnDeleted):
-                                return false;
-                            default:
-                                _logger.LogDebug(audit.Flag == AuditFlag.Deleted ? AuditEventId.Deleted : AuditEventId.UnDeleted,"Entity {EntityName} is marked as {AuditFlag}", entry.EntityType.Name, audit.Flag);
-                                break;
-                        }
+                        PerformDeleteUndelete(entry, auditActivator, deleted.Value, ref auditFlag, ref canStore, hasStorage, currentDateTime);
                     }
                     else
                     {
-                        if (changes.Length == 0)
-                        {
-                            _logger.LogDebug(AuditEventId.NoChangesFound, "Entity {EntityName} with state {EntityState} has no changes", entry.EntityType.Name, entry.State);
-                            return false;
-                        }
-
-                        if (!_options.IncludedFlags.Contains(AuditFlag.Changed))
-                            return false;
-                        
-                        audit.Flag = AuditFlag.Changed;
-                        audit.Changes = changes.ToArray();
-                        _logger.LogDebug(AuditEventId.Changed, "Entity {EntityName} is marked as {AuditFlag}", entry.EntityType.Name, audit.Flag);
+                        PerformChanged(entry, auditActivator, changes, ref auditFlag, ref canStore, ref finalChanges, hasStorage, currentDateTime);
                     }
 
                     break;
@@ -151,35 +125,44 @@ namespace R8.EntityFrameworkCore.AuditProvider
 
                 case EntityState.Added:
                 {
-                    if (!_options.IncludedFlags.Contains(AuditFlag.Created))
-                        return false;
-                    
-                    audit.Flag = AuditFlag.Created;
-                    _logger.LogDebug(AuditEventId.Created, "Entity {EntityName} is marked at {AuditFlag}", entry.EntityType.Name, audit.Flag);
+                    PerformCreated(entry, auditActivator, ref auditFlag, ref canStore, hasStorage, currentDateTime);
                     break;
                 }
-
-                default:
-                    throw new NotSupportedException($"State {entry.State} is not supported.");
             }
 
-            var audits = AppendAudit(entityAuditable, audit);
-            entityAuditable.Audits = JsonSerializer.SerializeToElement(audits, _options.JsonOptions);
+            if (canStore)
+            {
+                if (hasStorage && auditFlag.HasValue)
+                {
+                    var auditStorage = (IAuditStorage)auditActivator;
+                    var audit = new Audit
+                    {
+                        DateTime = currentDateTime,
+                        Flag = auditFlag.Value,
+                        User = auditUser,
+                        Changes = finalChanges.ToArray(),
+                    };
+                    var audits = AppendAudit(auditStorage, audit);
+                    auditStorage.Audits = JsonSerializer.SerializeToElement(audits, _options.JsonOptions);
 
-            return true;
+                    return;
+                }
+
+                _logger.LogDebug(AuditEventId.NotAuditable, "Entity {EntityName} with state {EntityState} does not implemented by {Auditable}. So it will be ignored while is not auditable", entry.EntityType.Name, entry.State, nameof(IAuditStorage));
+            }
         }
 
-        internal Audit[] AppendAudit(IAuditable entityAuditable, Audit audit)
+        internal Audit[] AppendAudit(IAuditStorage entityAuditable, Audit audit)
         {
-            Memory<Audit> newAudits;
+            Span<Audit> newAudits;
             if (entityAuditable.Audits != null)
             {
-                Memory<Audit> existingAudits = entityAuditable.Audits.Value.Deserialize<Audit[]>(_options.JsonOptions);
+                Span<Audit> existingAudits = entityAuditable.Audits.Value.Deserialize<Audit[]>(_options.JsonOptions);
                 if (_options.MaxStoredAudits is > 0 && existingAudits.Length >= _options.MaxStoredAudits.Value)
                 {
                     newAudits = new Audit[_options.MaxStoredAudits.Value];
                     var startIndex = 0;
-                    if (existingAudits.Span[0].Flag == AuditFlag.Created)
+                    if (existingAudits[0].Flag == AuditFlag.Created)
                     {
                         if (_options.MaxStoredAudits is 1)
                         {
@@ -187,17 +170,17 @@ namespace R8.EntityFrameworkCore.AuditProvider
                             // So we cannot add new audit to the list.
                             throw new InvalidOperationException("Max stored audits cannot be 1 when the first audit has Created flag.");
                         }
-                        
+
                         startIndex = 1;
-                        newAudits.Span[0] = existingAudits.Span[0];
+                        newAudits[0] = existingAudits[0];
                     }
-                    
+
                     startIndex = existingAudits.Length - _options.MaxStoredAudits.Value + startIndex;
-                    var adjustment = existingAudits.Span[0].Flag == AuditFlag.Created ? 0 : 1;
+                    var adjustment = existingAudits[0].Flag == AuditFlag.Created ? 0 : 1;
                     for (var i = startIndex + 1; i < existingAudits.Length; i++)
                     {
                         var index = i - startIndex;
-                        newAudits.Span[index - adjustment] = existingAudits.Span[i];
+                        newAudits[index - adjustment] = existingAudits[i];
                     }
                 }
                 else
@@ -205,36 +188,135 @@ namespace R8.EntityFrameworkCore.AuditProvider
                     newAudits = new Audit[existingAudits.Length + 1];
                     existingAudits.CopyTo(newAudits);
                 }
-                
-                newAudits.Span[^1] = audit;
+
+                newAudits[^1] = audit;
             }
             else
             {
                 newAudits = new Audit[1];
-                newAudits.Span[0] = audit;
+                newAudits[0] = audit;
             }
-            
+
             return newAudits.ToArray();
         }
 
-        private (bool? Deleted, Memory<AuditChange> Changed) GetChangedPropertyEntries(PropertyEntry[] propertyEntries)
+        private void PerformCreated(IEntityEntry entry, IAuditActivator auditActivator, ref AuditFlag? auditFlag, ref bool canStore, bool isStorage, DateTime currentDateTime)
+        {
+            if (_options.AuditFlagSupport.Created.HasFlag(AuditFlagState.ActionDate))
+            {
+                if (auditActivator is IAuditCreateDate cd)
+                    cd.CreateDate = currentDateTime;
+            }
+
+            auditFlag = AuditFlag.Created;
+            _logger.LogDebug(AuditEventId.Created, "Entity {EntityName} is marked at {AuditFlag}", entry.EntityType.Name, auditFlag);
+            canStore = isStorage && _options.AuditFlagSupport.Created.HasFlag(AuditFlagState.Storage);
+        }
+
+        private void PerformChanged(IEntityEntry entry, IAuditActivator auditActivator, Memory<AuditChange> changes, ref AuditFlag? auditFlag, ref bool canStore, ref Memory<AuditChange> finalChanges, bool isStorage, DateTime currentDateTime)
+        {
+            if (_options.AuditFlagSupport.Changed.HasFlag(AuditFlagState.ActionDate))
+            {
+                if (auditActivator is IAuditUpdateDate ud)
+                    ud.UpdateDate = currentDateTime;
+                if (auditActivator is IAuditDeleteDate dd)
+                    dd.DeleteDate = null;
+            }
+
+            if (_options.AuditFlagSupport.Changed.HasFlag(AuditFlagState.Storage))
+            {
+                if (!isStorage)
+                    return;
+
+                if (changes.Length == 0)
+                {
+                    _logger.LogDebug(AuditEventId.NoChangesFound, "Entity {EntityName} with state {EntityState} has no changes", entry.EntityType.Name, entry.State);
+                    return;
+                }
+
+                auditFlag = AuditFlag.Changed;
+                finalChanges = changes;
+                _logger.LogDebug(AuditEventId.Changed, "Entity {EntityName} is marked as {AuditFlag}", entry.EntityType.Name, auditFlag);
+            }
+            else
+            {
+                canStore = false;
+            }
+        }
+
+        private void PerformDeleteUndelete(IEntityEntry entry, IAuditActivator auditActivator, bool deleted, ref AuditFlag? auditFlag, ref bool canStore, bool isStorage, DateTime currentDateTime)
+        {
+            if (deleted)
+            {
+                auditFlag = AuditFlag.Deleted;
+
+                if (_options.AuditFlagSupport.Deleted.HasFlag(AuditFlagState.ActionDate))
+                {
+                    if (auditActivator is IAuditDeleteDate dd)
+                        dd.DeleteDate = currentDateTime;
+                }
+
+                canStore = isStorage && _options.AuditFlagSupport.Deleted.HasFlag(AuditFlagState.Storage);
+            }
+            else
+            {
+                auditFlag = AuditFlag.UnDeleted;
+
+                if (_options.AuditFlagSupport.UnDeleted.HasFlag(AuditFlagState.ActionDate))
+                {
+                    if (auditActivator is IAuditDeleteDate dd)
+                        dd.DeleteDate = null;
+                    if (auditActivator is IAuditUpdateDate ud)
+                        ud.UpdateDate = currentDateTime;
+                }
+
+                canStore = isStorage && _options.AuditFlagSupport.UnDeleted.HasFlag(AuditFlagState.Storage);
+            }
+
+            _logger.LogDebug(auditFlag == AuditFlag.Deleted ? AuditEventId.Deleted : AuditEventId.UnDeleted, "Entity {EntityName} is marked as {AuditFlag}", entry.EntityType.Name, auditFlag);
+        }
+
+        private (bool? Deleted, Memory<AuditChange> Changed) GetChangedPropertyEntries(PropertyEntry[] propertyEntries, bool hasAuditStorage)
         {
             Memory<AuditChange> memory = new AuditChange[propertyEntries.Length];
             var lastIndex = -1;
             bool? deleted = null;
             foreach (var propertyEntry in propertyEntries)
             {
+                if (!propertyEntry.IsModified)
+                    continue;
+
                 var propertyType = propertyEntry.Metadata.ClrType;
-                if (propertyEntry.Metadata.PropertyInfo?.GetCustomAttribute<IgnoreAuditAttribute>() != null)
+                if (propertyEntry.Metadata.PropertyInfo?.GetCustomAttribute<AuditIgnoreAttribute>() != null)
                     continue;
 
                 var propertyName = propertyEntry.Metadata.Name;
-                if (propertyName.Equals(nameof(IAuditable.Audits), StringComparison.Ordinal))
+                if (propertyName.Equals(nameof(IAuditStorage.Audits), StringComparison.Ordinal) ||
+                    propertyName.Equals(nameof(IAuditCreateDate.CreateDate), StringComparison.Ordinal) ||
+                    propertyName.Equals(nameof(IAuditUpdateDate.UpdateDate), StringComparison.Ordinal) ||
+                    propertyName.Equals(nameof(IAuditDeleteDate.DeleteDate), StringComparison.Ordinal))
                     continue;
-                
+
                 var currentNull = propertyEntry.CurrentValue is null;
                 var originalNull = propertyEntry.OriginalValue is null;
                 if ((currentNull && originalNull) || propertyEntry.CurrentValue?.Equals(propertyEntry.OriginalValue) == true)
+                    continue;
+
+                if (string.Equals(propertyName, nameof(IAuditSoftDelete.IsDeleted), StringComparison.Ordinal))
+                {
+                    var oldValue = !originalNull && (bool)propertyEntry.OriginalValue!;
+                    var newValue = !currentNull && (bool)propertyEntry.CurrentValue!;
+                    if (oldValue == false && newValue == true)
+                        deleted = true;
+                    else if (oldValue == true && newValue == false)
+                        deleted = false;
+                    else
+                        deleted = null;
+
+                    continue;
+                }
+
+                if (!hasAuditStorage)
                     continue;
 
                 if (propertyEntry is { CurrentValue: IEnumerable ce, OriginalValue: IEnumerable oe })
@@ -259,19 +341,6 @@ namespace R8.EntityFrameworkCore.AuditProvider
                     if (originalEnumerator is IDisposable oed) oed.Dispose();
                 }
 
-                if (string.Equals(propertyName, nameof(IAuditableDelete.IsDeleted), StringComparison.Ordinal))
-                {
-                    var oldValue = !originalNull && (bool)propertyEntry.OriginalValue!;
-                    var newValue = !currentNull && (bool)propertyEntry.CurrentValue!;
-                    deleted = oldValue switch
-                    {
-                        false when newValue => true,
-                        true when !newValue => false,
-                        _ => null
-                    };
-                    continue;
-                }
-
                 var newString = GetValue(propertyEntry.CurrentValue, propertyType, currentNull);
                 var oldString = GetValue(propertyEntry.OriginalValue, propertyType, originalNull);
 
@@ -285,9 +354,9 @@ namespace R8.EntityFrameworkCore.AuditProvider
 
         private JsonElement? GetValue(object? value, Type propertyType, bool isNull)
         {
-            if (isNull) 
+            if (isNull)
                 return null;
-            
+
             JsonElement? newString;
             if (value is JsonDocument jsonDoc)
             {

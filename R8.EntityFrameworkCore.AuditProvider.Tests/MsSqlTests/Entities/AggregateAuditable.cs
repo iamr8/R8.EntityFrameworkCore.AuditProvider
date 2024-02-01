@@ -5,11 +5,11 @@ using R8.EntityFrameworkCore.AuditProvider.Abstractions;
 
 namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Entities
 {
-    public abstract record AggregateAuditable : IAuditable, IAuditableDelete
+    public abstract record AggregateAuditable : IAuditActivator, IAuditStorage, IAuditSoftDelete
     {
         public bool IsDeleted { get; set; }
 
-        [Column(nameof(Audits), TypeName = "nvarchar(max)"), IgnoreAudit]
+        [Column(nameof(Audits), TypeName = "nvarchar(max)"), AuditIgnore]
         public string? AuditsJson { get; set; }
 
         [NotMapped]

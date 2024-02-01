@@ -81,6 +81,14 @@ namespace R8.EntityFrameworkCore.AuditProvider.Abstractions
             return _cachedDeserialized;
         }
 
+        /// <summary>
+        /// Parses <see cref="JsonElement"/> to <see cref="AuditCollection"/>.
+        /// </summary>
+        public static AuditCollection Parse(JsonElement element)
+        {
+            return new AuditCollection(element);
+        }
+        
         public static explicit operator AuditCollection(JsonElement element)
         {
             return new AuditCollection(element);
