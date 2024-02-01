@@ -5,7 +5,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <EnableNETAnalyzers>true</EnableNETAnalyzers>
-        <Version>1.0.9</Version>
+        <Version>1.0.10</Version>
         <Authors>iamr8</Authors>
         <Description>A .NET package for Entity Framework, providing comprehensive change tracking with deep insights.</Description>
         <PackageId>R8.EntityFrameworkCore.AuditProvider.Abstractions</PackageId>
@@ -16,6 +16,7 @@
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <IncludeSymbols>true</IncludeSymbols>
         <LangVersion>10</LangVersion>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
     </PropertyGroup>
 
     <ItemGroup>
