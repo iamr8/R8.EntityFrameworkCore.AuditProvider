@@ -8,6 +8,14 @@ A .NET package for Entity Framework, providing comprehensive change tracking wit
 
 ### Installation
 
+```
+dotnet add package R8.EntityFrameworkCore.AuditProvider
+```
+
+---
+
+### Usage
+
 ```csharp
 // ... other services
 
@@ -64,7 +72,7 @@ services.AddDbContext<YourDbContext>((serviceProvider, optionsBuilder) =>
 
 ---
 
-### Implementation
+### Wiki
 
 - `IAuditActivator` interface: to start auditing entities.
 - `IAuditStorage` interface: to store audits in a column.
