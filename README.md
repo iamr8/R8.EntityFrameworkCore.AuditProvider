@@ -33,6 +33,8 @@ services.AddEntityFrameworkAuditProvider(options =>
     
     options.MaxStoredAudits = 10;
     
+    options.DateTimeProvider = serviceProvider => DateTime.UtcNow;
+    
     options.UserProvider = serviceProvider =>
     {
         var httpContextAccessor = serviceProvider.GetRequiredService<IHttpContextAccessor>();
