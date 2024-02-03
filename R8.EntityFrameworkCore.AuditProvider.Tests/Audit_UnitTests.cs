@@ -102,10 +102,10 @@ public class Audit_UnitTests
         await interceptor.AckAuditsAsync(entry, dbContext);
 
         entity.Audits.Should().NotBeNull();
-        var auditCollection = (AuditCollection)entity.Audits.Value;
+        var auditCollection = entity.GetAuditCollection();
         auditCollection.Should().NotBeNull();
 
-        var createdAudit = auditCollection.GetCreated();
+        var createdAudit = auditCollection.First();
         createdAudit.Should().NotBeNull();
         createdAudit.Value.Flag.Should().Be(AuditFlag.Created);
         createdAudit.Value.DateTime.Should().NotBe(DateTime.MinValue);
@@ -115,13 +115,12 @@ public class Audit_UnitTests
     public void should_not_return_anything_when_AuditCollection_is_empty()
     {
         const string json = "[]";
-        var jsonElement = JsonSerializer.Deserialize<JsonElement>(json, AuditProviderConfiguration.JsonOptions);
-        var auditCollection = (AuditCollection)jsonElement;
+        var jsonElement = JsonSerializer.Deserialize<Audit[]>(json, AuditProviderConfiguration.JsonOptions);
+        var auditCollection = new AuditCollection(jsonElement);
         auditCollection.Should().NotBeNull();
 
-        auditCollection.Element.Should().Be(jsonElement);
-        auditCollection.GetCreated().Should().BeNull();
-        auditCollection.GetLast().Should().BeNull();
+        auditCollection.First().Should().BeNull();
+        auditCollection.Last(false).Should().BeNull();
     }
 
     [Fact]
@@ -144,14 +143,13 @@ public class Audit_UnitTests
 
 
         entity.Audits.Should().NotBeNull();
-        var auditCollection = (AuditCollection)entity.Audits.Value;
+        var auditCollection = entity.GetAuditCollection();
         auditCollection.Should().NotBeNull();
 
-        var audits = auditCollection.Deserialize();
-        audits.Should().NotBeNull();
-        audits.Should().HaveCount(2);
+        auditCollection.Should().NotBeNull();
+        auditCollection.Should().HaveCount(2);
 
-        var createdAudit = auditCollection.GetCreated();
+        var createdAudit = auditCollection.First();
         createdAudit.Should().NotBeNull();
         createdAudit.Value.Flag.Should().Be(AuditFlag.Created);
         createdAudit.Value.DateTime.Should().NotBe(DateTime.MinValue);
@@ -178,10 +176,10 @@ public class Audit_UnitTests
 
 
         entity.Audits.Should().NotBeNull();
-        var auditCollection = (AuditCollection)entity.Audits.Value;
+        var auditCollection = entity.GetAuditCollection();
         auditCollection.Should().NotBeNull();
 
-        var createdAudit = auditCollection.GetCreated();
+        var createdAudit = auditCollection.First();
         createdAudit.Should().BeNull();
     }
 
@@ -205,10 +203,10 @@ public class Audit_UnitTests
 
 
         entity.Audits.Should().NotBeNull();
-        var auditCollection = (AuditCollection)entity.Audits.Value;
+        var auditCollection = entity.GetAuditCollection();
         auditCollection.Should().NotBeNull();
 
-        var lastAudit = auditCollection.GetLast();
+        var lastAudit = auditCollection.Last(false);
         lastAudit.Should().NotBeNull();
         lastAudit.Value.Flag.Should().Be(AuditFlag.Changed);
         lastAudit.Value.DateTime.Should().NotBe(DateTime.MinValue);
@@ -238,10 +236,10 @@ public class Audit_UnitTests
         await interceptor.AckAuditsAsync(entry, dbContext);
 
         entity.Audits.Should().NotBeNull();
-        var auditCollection = (AuditCollection)entity.Audits.Value;
+        var auditCollection = entity.GetAuditCollection();
         auditCollection.Should().NotBeNull();
 
-        var lastAudit = auditCollection.GetLast(false);
+        var lastAudit = auditCollection.Last(false);
         lastAudit.Should().NotBeNull();
         lastAudit.Value.Flag.Should().Be(AuditFlag.Changed);
         lastAudit.Value.DateTime.Should().NotBe(DateTime.MinValue);
@@ -271,10 +269,10 @@ public class Audit_UnitTests
         await interceptor.AckAuditsAsync(entry, dbContext);
 
         entity.Audits.Should().NotBeNull();
-        var auditCollection = (AuditCollection)entity.Audits.Value;
+        var auditCollection = entity.GetAuditCollection();
         auditCollection.Should().NotBeNull();
 
-        var lastAudit = auditCollection.GetLast(true);
+        var lastAudit = auditCollection.Last(true);
         lastAudit.Should().NotBeNull();
         lastAudit.Value.Flag.Should().Be(AuditFlag.Deleted);
         lastAudit.Value.DateTime.Should().NotBe(DateTime.MinValue);
@@ -324,7 +322,7 @@ public class Audit_UnitTests
         entity.Audits.Should().NotBeNull();
         entity.Audits.Value.ValueKind.Should().Be(JsonValueKind.Array);
 
-        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
+        var audits = entity.GetAuditCollection();
         audits.Should().NotBeNull();
         audits.Should().ContainSingle();
 
@@ -356,7 +354,7 @@ public class Audit_UnitTests
         entity.Audits.Should().NotBeNull();
         entity.Audits.Value.ValueKind.Should().Be(JsonValueKind.Array);
 
-        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
+        var audits = entity.GetAuditCollection();
         audits.Should().NotBeNull();
         audits.Should().ContainSingle();
 
@@ -399,7 +397,7 @@ public class Audit_UnitTests
         entity.Audits.Should().NotBeNull();
         entity.Audits.Value.ValueKind.Should().Be(JsonValueKind.Array);
 
-        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
+        var audits = entity.GetAuditCollection();
         audits.Should().NotBeNull();
         audits.Should().ContainSingle();
 
@@ -447,7 +445,7 @@ public class Audit_UnitTests
         entity.Audits.Should().NotBeNull();
         entity.Audits.Value.ValueKind.Should().Be(JsonValueKind.Array);
 
-        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
+        var audits = entity.GetAuditCollection();
         audits.Should().NotBeNull();
         audits.Should().ContainSingle();
 
@@ -485,7 +483,7 @@ public class Audit_UnitTests
         entity.Audits.Should().NotBeNull();
         entity.Audits.Value.ValueKind.Should().Be(JsonValueKind.Array);
 
-        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
+        var audits = entity.GetAuditCollection();
         audits.Should().NotBeNull();
         audits.Should().ContainSingle();
 
@@ -519,7 +517,7 @@ public class Audit_UnitTests
         entity.Audits.Should().NotBeNull();
         entity.Audits.Value.ValueKind.Should().Be(JsonValueKind.Array);
 
-        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
+        var audits = entity.GetAuditCollection();
         audits.Should().NotBeNull();
         audits.Should().ContainSingle();
 
@@ -557,7 +555,7 @@ public class Audit_UnitTests
         stopWatch.Stop();
 
 
-        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
+        var audits = entity.GetAuditCollection();
         audits.Should().NotBeNull();
         audits.Should().ContainSingle();
 
@@ -602,7 +600,7 @@ public class Audit_UnitTests
         stopWatch.Stop();
 
 
-        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
+        var audits = entity.GetAuditCollection();
         audits.Should().NotBeNull();
         audits.Should().ContainSingle();
 
@@ -664,7 +662,7 @@ public class Audit_UnitTests
         entity.Audits.Should().NotBeNull();
         entity.Audits.Value.ValueKind.Should().Be(JsonValueKind.Array);
 
-        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
+        var audits = entity.GetAuditCollection();
         audits.Should().NotBeNull();
         audits.Should().ContainSingle();
 
@@ -720,7 +718,7 @@ public class Audit_UnitTests
         var modificationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
         await interceptor.AckAuditsAsync(modificationEntry, dbContext);
 
-        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
+        var audits = entity.GetAuditCollection();
         audits.Should().NotBeNull();
         audits.Should().HaveCount(2);
 
@@ -1068,7 +1066,7 @@ public class Audit_UnitTests
         stopWatch.Stop();
 
 
-        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
+        var audits = entity.GetAuditCollection();
         audits.Should().NotBeNull();
         audits.Should().HaveCount(1);
 
@@ -1186,7 +1184,7 @@ public class Audit_UnitTests
         var modificationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
         await interceptor.AckAuditsAsync(modificationEntry, dbContext);
 
-        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
+        var audits = entity.GetAuditCollection();
         audits.Should().NotBeNull();
         audits.Should().HaveCount(2);
 
@@ -1226,7 +1224,7 @@ public class Audit_UnitTests
         await interceptor.AckAuditsAsync(creationEntry, dbContext);
         stopWatch.Stop();
 
-        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
+        var audits = entity.GetAuditCollection();
         audits.Should().NotBeNull();
         audits.Should().ContainSingle();
 
@@ -1265,7 +1263,7 @@ public class Audit_UnitTests
         stopWatch.Stop();
 
 
-        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
+        var audits = entity.GetAuditCollection();
         audits.Should().NotBeNull();
         audits.Should().ContainSingle();
 
@@ -1318,7 +1316,7 @@ public class Audit_UnitTests
         stopWatch.Stop();
 
 
-        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
+        var audits = entity.GetAuditCollection();
         audits.Should().NotBeNull();
         audits.Should().ContainSingle();
 
@@ -1353,7 +1351,7 @@ public class Audit_UnitTests
         stopWatch.Stop();
 
 
-        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
+        var audits = entity.GetAuditCollection();
         audits.Should().NotBeNull();
         audits.Should().ContainSingle();
 
@@ -1388,7 +1386,7 @@ public class Audit_UnitTests
         stopWatch.Stop();
 
 
-        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
+        var audits = entity.GetAuditCollection();
         audits.Should().NotBeNull();
         audits.Should().ContainSingle();
 
@@ -1434,7 +1432,7 @@ public class Audit_UnitTests
         stopWatch.Stop();
 
 
-        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
+        var audits = entity.GetAuditCollection();
         audits.Should().NotBeNull();
         audits.Should().ContainSingle();
 
@@ -1574,7 +1572,7 @@ public class Audit_UnitTests
         await interceptor.AckAuditsAsync(creationEntry, dbContext);
         stopWatch.Stop();
 
-        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
+        var audits = entity.GetAuditCollection();
         audits.Should().NotBeNull();
         audits.Should().ContainSingle();
 
@@ -1615,7 +1613,7 @@ public class Audit_UnitTests
         stopWatch.Stop();
 
 
-        var audits = ((AuditCollection)entity.Audits.Value).Deserialize();
+        var audits = entity.GetAuditCollection();
         audits.Should().NotBeNull();
         audits.Should().ContainSingle();
 

@@ -140,7 +140,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
                         DateTime = currentDateTime,
                         Flag = auditFlag.Value,
                         User = auditUser,
-                        Changes = finalChanges.ToArray(),
+                        Changes = finalChanges.Length > 0 ? finalChanges.ToArray() : null,
                     };
                     var audits = AppendAudit(auditStorage, audit);
                     auditStorage.Audits = JsonSerializer.SerializeToElement(audits, _options.JsonOptions);

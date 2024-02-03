@@ -137,20 +137,18 @@ _Highly recommended to test it on a test database first, to avoid any data loss.
 
 ---
 
-### Some useful methods
+### Audit Collection
 
-To take advantages of `JsonElement Audits` property, you can easily convert it to `AuditCollection`:
+To take advantages of `JsonElement Audits` (as a property in `IAuditStorage` interface):
 
 ```csharp
-var audits = (AuditCollection)entity.Audits.Value; // Cast to AuditCollection
-// or
-// var audits = AuditCollection.Parse(entity.Audits.Value);
+var entity = await dbContext.YourEntities.FindAsync(1);
+var audits = entity.GetAuditCollection();
 
-JsonElement jsonElement = audits.Element; // Get underlying JsonElement
-
-Audit[] deserializedAudits = audits.Deserialize(); // Get deserialized audits
-Audit creationAudit = audits.GetCreated(); // Get created audit
-Audit lastUpdatedAudit = audits.GetLast(includedDeleted: false); // Get last audit
+Audit[] deserializedAudits = audits.ToArray(); // Get audits as array
+Audit creationAudit = audits.First(); // Get created audit
+Audit lastAudit = audits.Last(false); // Get last audit. (false) means to exclude Deleted flag audit, if is the last one.
+Audit[] changes = audit.Track(nameof(entity.Name)); // Get changes of a property
 ```
 
 ---
@@ -162,42 +160,38 @@ Stored data in `Audits` column will be like this:
 ```json5
 [
   {
-    "f": "0",
-    // Created
-    "dt": "2023-09-25T12:00:00.0000000+03:30",
+    "f": 0, // Created
+    "dt": "2023-09-25T12:00:00.0000000+03:30", // Date and time of the action
   },
   {
-    "f": "1",
-    // Updated
-    "dt": "2023-09-25T12:00:00.0000000+03:30",
-    "c": [
+    "f": 1, // Changed
+    "dt": "2023-09-25T12:00:00.0000000+03:30", // Date and time of the action
+    "c": [ // Changes
       {
-        "n": "Name",
-        // Name of the property
-        "_v": "OldName",
-        // Old value
-        "v": "NewName"
-        // New value
+        "n": "Name", // Name of the property
+        "_v": "OldName", // Old value
+        "v": "NewName" // New value
+      },
+      {
+        "n": "Age", // Name of the property
+        "_v": 0, // Old value
+        "v": 33 // New value
       }
     ],
-    "u": {
-      "id": "1",
-      // The user id (if provided)
-      "ad": {
-        // The user additional info (if provided)
+    "u": { // User that made the change
+      "id": "1", // The user id (if provided)
+      "ad": { // The user additional info (if provided)
         "Username": "Foo"
       }
     }
   },
   {
-    "f": "2",
-    // Deleted
-    "dt": "2023-09-25T12:00:00.0000000+03:30",
+    "f": 2, // Deleted
+    "dt": "2023-09-25T12:00:00.0000000+03:30", // Date and time of the action
   },
   {
-    "f": "3",
-    // Restored/Undeleted
-    "dt": "2023-09-25T12:00:00.0000000+03:30",
+    "f": 3, // Restored/Undeleted
+    "dt": "2023-09-25T12:00:00.0000000+03:30", // Date and time of the action
   }
 ]
 ```

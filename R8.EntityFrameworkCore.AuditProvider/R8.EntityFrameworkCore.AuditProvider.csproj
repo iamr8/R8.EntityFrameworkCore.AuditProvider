@@ -5,7 +5,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <EnableNETAnalyzers>true</EnableNETAnalyzers>
-        <Version>1.0.10</Version>
+        <Version>1.1.0</Version>
         <Authors>iamr8</Authors>
         <Description>A .NET package for Entity Framework, providing comprehensive change tracking with deep insights.</Description>
         <PackageId>R8.EntityFrameworkCore.AuditProvider</PackageId>
@@ -29,7 +29,7 @@
     </ItemGroup>
     
     <ItemGroup>
-        <PackageReference Include="R8.EntityFrameworkCore.AuditProvider.Abstractions" Version="1.0.10" />
+        <PackageReference Include="R8.EntityFrameworkCore.AuditProvider.Abstractions" Version="1.1.0" />
         <PackageReference Include="Meziantou.Analyzer" Version="2.0.139">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
