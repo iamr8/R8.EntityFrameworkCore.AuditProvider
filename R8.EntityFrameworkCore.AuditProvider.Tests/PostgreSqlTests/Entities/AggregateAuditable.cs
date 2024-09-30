@@ -5,7 +5,7 @@ using R8.EntityFrameworkCore.AuditProvider.Abstractions;
 
 namespace R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.Entities
 {
-    public abstract record AggregateAuditable : IAuditActivator, IAuditStorage, IAuditSoftDelete
+    public abstract record AggregateAuditable : IAuditActivator, IAuditJsonStorage, IAuditSoftDelete
     {
         public bool IsDeleted { get; set; }
 

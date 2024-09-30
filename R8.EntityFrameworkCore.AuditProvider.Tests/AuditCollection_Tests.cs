@@ -12,7 +12,7 @@ public class AuditCollection_Tests
         AuditProviderConfiguration.JsonOptions = new AuditProviderOptions().JsonOptions;
     }
 
-    public class MockingEntity : IAuditActivator, IAuditStorage
+    public class MockingEntity : IAuditActivator, IAuditJsonStorage
     {
         public string Name { get; set; }
         public JsonElement? Audits { get; set; }

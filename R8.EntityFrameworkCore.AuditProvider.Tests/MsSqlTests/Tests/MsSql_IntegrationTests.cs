@@ -1,9 +1,7 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-
 using R8.EntityFrameworkCore.AuditProvider.Abstractions;
 using R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Entities;
-
 using Xunit.Abstractions;
 
 namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Tests
@@ -17,12 +15,12 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Tests
             _outputHelper = outputHelper;
             this.OnWriteLine += _outputHelper.WriteLine;
         }
-        
+
         public void Dispose()
         {
             this.OnWriteLine -= _outputHelper.WriteLine;
         }
-        
+
         [Fact]
         public async Task Should_Add_Changes_When_Updated()
         {
@@ -100,7 +98,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Tests
 
             entity.IsDeleted = true;
             entity.Name = "UK";
-            MsSqlDbContext.Update(entity);
+            entity = MsSqlDbContext.Update(entity).Entity;
             await Assert.ThrowsAsync<NotSupportedException>(async () => await MsSqlDbContext.SaveChangesAsync());
         }
 
@@ -159,7 +157,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Tests
             await MsSqlDbContext.SaveChangesAsync();
 
             // Arrange
-            var audits = entity.GetAuditCollection();
+            var audits = entity.Audits;
             Assert.NotEmpty(audits);
 
             audits.Should().HaveCount(2);
@@ -358,6 +356,67 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Tests
 
             firstAudit.Flag.Should().Be(lastAudit.Flag);
             lastAudit.Flag.Should().Be(AuditFlag.Created);
+        }
+
+        [Fact]
+        public async Task should_encode_value_when_the_value_is_string_json()
+        {
+            // Act
+            var entity = new MyAuditableEntity
+            {
+                Name = "{\"key\": \"value\"}",
+            };
+
+            MsSqlDbContext.Add(entity);
+
+            await MsSqlDbContext.SaveChangesAsync();
+
+            entity.Name = "{\"key\": \"value2\"}";
+            MsSqlDbContext.Update(entity);
+            await MsSqlDbContext.SaveChangesAsync();
+
+            var audits = entity.GetAuditCollection();
+            Assert.NotEmpty(audits);
+
+            var lastAudit = audits.MaxBy(x => x.DateTime);
+            lastAudit.Flag.Should().Be(AuditFlag.Changed);
+
+            var changes = lastAudit.Changes.ToArray();
+            changes.Should().NotBeEmpty();
+            changes.Should().Contain(x => x.Column == "Name" && x.OldValue.Value.ToString() == "{\"key\": \"value\"}" && x.NewValue.Value.ToString() == "{\"key\": \"value2\"}");
+        }
+
+        [Fact]
+        public async Task should_not_flag_a_unchanged_json_value()
+        {
+            // Act
+            var entity = new MyAuditableEntity
+            {
+                Name = "{\"key\": \"value\"}",
+            };
+
+            MsSqlDbContext.Add(entity);
+
+            await MsSqlDbContext.SaveChangesAsync();
+
+            entity.Name = "{\"key\": \"value2\"}";
+            MsSqlDbContext.Update(entity);
+            await MsSqlDbContext.SaveChangesAsync();
+
+            entity.Name = "{\"key\": \"value2\"}";
+            MsSqlDbContext.Update(entity);
+            await MsSqlDbContext.SaveChangesAsync();
+
+            var audits = entity.GetAuditCollection();
+            Assert.NotEmpty(audits);
+
+            var lastAudit = audits.MaxBy(x => x.DateTime);
+            lastAudit.Flag.Should().Be(AuditFlag.Changed);
+            audits.Where(x => x.Flag == AuditFlag.Changed).Should().HaveCount(1);
+
+            var changes = lastAudit.Changes.ToArray();
+            changes.Should().NotBeEmpty();
+            changes.Should().Contain(x => x.Column == "Name" && x.OldValue.Value.ToString() == "{\"key\": \"value\"}" && x.NewValue.Value.ToString() == "{\"key\": \"value2\"}");
         }
     }
 }

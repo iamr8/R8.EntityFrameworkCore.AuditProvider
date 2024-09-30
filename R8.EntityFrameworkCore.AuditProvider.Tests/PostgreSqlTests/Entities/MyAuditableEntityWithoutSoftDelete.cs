@@ -6,7 +6,7 @@ using R8.EntityFrameworkCore.AuditProvider.Tests.Entities;
 
 namespace R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.Entities;
 
-public class MyAuditableEntityWithoutSoftDelete : IAggregateEntity, IAuditStorage
+public class MyAuditableEntityWithoutSoftDelete : IAggregateEntity, IAuditJsonStorage
 {
     public int Id { get; set; }
     public string Name { get; set; }

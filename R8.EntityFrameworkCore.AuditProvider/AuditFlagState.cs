@@ -16,7 +16,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
         ActionDate = 1,
         
         /// <summary>
-        /// Will be included only when <see cref="IAuditStorage"/> is implemented.
+        /// Will be included only when <see cref="IAuditJsonStorage"/> is implemented.
         /// </summary>
         Storage = 2,
     }

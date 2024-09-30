@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-
 using R8.EntityFrameworkCore.AuditProvider.Abstractions;
 using R8.EntityFrameworkCore.AuditProvider.Tests.Entities;
 
@@ -14,7 +13,7 @@ public record MyAuditableEntity : AggregateAuditable, IAggregateEntity
     public DateTime Date { get; set; }
     public DateTimeOffset DateOffset { get; set; }
     public int? NullableInt { get; set; }
-        
+
     public int? MyAuditableEntityId { get; set; }
     public virtual MyAuditableEntity? Parent { get; set; }
     public virtual ICollection<MyAuditableEntity> Children { get; set; } = new List<MyAuditableEntity>();

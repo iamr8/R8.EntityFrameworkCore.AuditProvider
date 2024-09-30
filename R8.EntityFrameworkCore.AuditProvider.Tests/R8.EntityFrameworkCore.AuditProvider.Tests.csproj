@@ -10,28 +10,27 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="FluentAssertions" Version="6.12.0"/>
-        <PackageReference Include="FluentAssertions.Analyzers" Version="0.30.0">
+        <PackageReference Include="FluentAssertions" Version="6.12.1" />
+        <PackageReference Include="FluentAssertions.Analyzers" Version="0.33.0">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0"/>
-        <PackageReference Include="MongoDB.Driver" Version="2.23.1" />
-        <PackageReference Include="NSubstitute" Version="5.1.0" />
-        <PackageReference Include="R8.XunitLogger" Version="1.1.2" />
-        <PackageReference Include="xunit" Version="2.6.6"/>
-        <PackageReference Include="xunit.runner.visualstudio" Version="2.5.6">
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+        <PackageReference Include="NSubstitute" Version="5.1.0"/>
+        <PackageReference Include="R8.XunitLogger" Version="1.1.3" />
+        <PackageReference Include="xunit" Version="2.9.2" />
+        <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
-        <PackageReference Include="coverlet.collector" Version="6.0.0">
+        <PackageReference Include="coverlet.collector" Version="6.0.2">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
     </ItemGroup>
 
     <ItemGroup Condition="'$(TargetFramework)' == 'net6.0'">
-        <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="7.0.15" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="7.0.15"/>
         <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="7.0.15">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -40,7 +39,7 @@
     </ItemGroup>
 
     <ItemGroup Condition="'$(TargetFramework)' == 'net7.0'">
-        <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="7.0.15" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="7.0.15"/>
         <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="7.0.15">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -49,7 +48,7 @@
     </ItemGroup>
 
     <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
-        <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.1" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.1"/>
         <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.1">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -58,11 +57,11 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\R8.EntityFrameworkCore.AuditProvider\R8.EntityFrameworkCore.AuditProvider.csproj" />
+        <ProjectReference Include="..\R8.EntityFrameworkCore.AuditProvider\R8.EntityFrameworkCore.AuditProvider.csproj"/>
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="MongoDbTests\" />
+        <Folder Include="MongoDbTests\"/>
     </ItemGroup>
 
 </Project>

@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using R8.EntityFrameworkCore.AuditProvider.Abstractions;
 using R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Entities;
 
 namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests
@@ -18,6 +19,12 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            modelBuilder.Entity<MyEntity>()
+                .HasOne(x => x.MyAuditableEntity)
+                .WithMany(x => x.MyEntities)
+                .HasForeignKey(x => x.MyAuditableEntityId)
+                .IsRequired(false);
+
             modelBuilder.Entity<MyAuditableEntity>()
                 .HasMany(x => x.MyEntities)
                 .WithOne(x => x.MyAuditableEntity)
@@ -28,7 +35,12 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests
                 .WithOne(x => x.Parent)
                 .HasForeignKey(x => x.MyAuditableEntityId)
                 .IsRequired(false);
-            modelBuilder.Entity<MyEntity>();
+
+            modelBuilder.Entity<MyAuditableEntity>()
+                .Property(x => x.Audits)
+                .HasConversion(
+                    v => JsonSerializer.Serialize(v, AuditProviderConfiguration.JsonOptions),
+                    v => !string.IsNullOrWhiteSpace(v) ? JsonSerializer.Deserialize<Audit[]>(v, AuditProviderConfiguration.JsonOptions) : Array.Empty<Audit>());
         }
     }
 }

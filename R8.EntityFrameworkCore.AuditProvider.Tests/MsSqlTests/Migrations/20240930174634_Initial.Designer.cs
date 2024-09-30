@@ -12,7 +12,7 @@ using R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests;
 namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Migrations
 {
     [DbContext(typeof(MsSqlDbContext))]
-    [Migration("20240125181739_Initial")]
+    [Migration("20240930174634_Initial")]
     partial class Initial
     {
         /// <inheritdoc />
@@ -25,7 +25,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
-            modelBuilder.Entity("R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.MyAuditableEntity", b =>
+            modelBuilder.Entity("R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Entities.MyAuditableEntity", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -33,9 +33,8 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("AuditsJson")
-                        .HasColumnType("nvarchar(max)")
-                        .HasColumnName("Audits");
+                    b.Property<string>("Audits")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime>("Date")
                         .HasColumnType("datetime2");
@@ -68,7 +67,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Migrations
                     b.ToTable("MyAuditableEntities");
                 });
 
-            modelBuilder.Entity("R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.MyEntity", b =>
+            modelBuilder.Entity("R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Entities.MyEntity", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -89,25 +88,25 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Migrations
                     b.ToTable("MyEntities");
                 });
 
-            modelBuilder.Entity("R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.MyAuditableEntity", b =>
+            modelBuilder.Entity("R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Entities.MyAuditableEntity", b =>
                 {
-                    b.HasOne("R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.MyAuditableEntity", "Parent")
+                    b.HasOne("R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Entities.MyAuditableEntity", "Parent")
                         .WithMany("Children")
                         .HasForeignKey("MyAuditableEntityId");
 
                     b.Navigation("Parent");
                 });
 
-            modelBuilder.Entity("R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.MyEntity", b =>
+            modelBuilder.Entity("R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Entities.MyEntity", b =>
                 {
-                    b.HasOne("R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.MyAuditableEntity", "MyAuditableEntity")
+                    b.HasOne("R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Entities.MyAuditableEntity", "MyAuditableEntity")
                         .WithMany("MyEntities")
                         .HasForeignKey("MyAuditableEntityId");
 
                     b.Navigation("MyAuditableEntity");
                 });
 
-            modelBuilder.Entity("R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.MyAuditableEntity", b =>
+            modelBuilder.Entity("R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Entities.MyAuditableEntity", b =>
                 {
                     b.Navigation("Children");
 

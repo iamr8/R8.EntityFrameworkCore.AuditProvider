@@ -1,3 +1,4 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -11,7 +12,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
         /// A default json serializer options to be used in serialization and deserialization of audits.
         /// </summary>
         /// <remarks>An optimal settings is already set.</remarks>
-        public JsonSerializerOptions JsonOptions { get; } = new()
+        public JsonSerializerOptions JsonOptions { get; } = new(JsonSerializerDefaults.Web)
         {
             ReferenceHandler = ReferenceHandler.IgnoreCycles,
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
@@ -33,17 +34,17 @@ namespace R8.EntityFrameworkCore.AuditProvider
             Deleted = AuditFlagState.ActionDate | AuditFlagState.Storage,
             UnDeleted = AuditFlagState.ActionDate | AuditFlagState.Storage,
         };
-        
+
         /// <summary>
         /// A <see cref="int"/> value that represents maximum number of audits to be stored. Audit with flag <see cref="AuditFlag.Created"/> remains as the first audit (if provided).
         /// </summary>
         public int? MaxStoredAudits { get; set; }
-        
+
         /// <summary>
         /// A <see cref="Func{TResult}"/> that represents a method to get current date time.
         /// </summary>
         public Func<IServiceProvider, DateTime>? DateTimeProvider { get; set; }
-        
+
         /// <summary>
         /// A <see cref="Func{TResult}"/> that represents a method to get current user.
         /// </summary>

@@ -2,12 +2,10 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json;
-
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
-
 using R8.EntityFrameworkCore.AuditProvider.Abstractions;
 
 namespace R8.EntityFrameworkCore.AuditProvider
@@ -60,7 +58,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
 
             var currentDateTime = _options.DateTimeProvider?.Invoke(_serviceProvider) ?? DateTime.UtcNow;
 
-            var hasStorage = auditActivator is IAuditStorage;
+            var hasStorage = auditActivator is IAuditStorageBase;
             AuditUser? auditUser = null;
             AuditFlag? auditFlag = null;
             var finalChanges = Memory<AuditChange>.Empty;
@@ -134,7 +132,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
             {
                 if (hasStorage && auditFlag.HasValue)
                 {
-                    var auditStorage = (IAuditStorage)auditActivator;
+                    var auditStorage = (IAuditStorageBase)auditActivator;
                     var audit = new Audit
                     {
                         DateTime = currentDateTime,
@@ -143,59 +141,94 @@ namespace R8.EntityFrameworkCore.AuditProvider
                         Changes = finalChanges.Length > 0 ? finalChanges.ToArray() : null,
                     };
                     var audits = AppendAudit(auditStorage, audit);
-                    auditStorage.Audits = JsonSerializer.SerializeToElement(audits, _options.JsonOptions);
+
+                    switch (auditStorage)
+                    {
+                        case IAuditJsonStorage jsonStorage:
+                        {
+                            jsonStorage.Audits = JsonSerializer.SerializeToElement(audits, _options.JsonOptions);
+                            break;
+                        }
+                        case IAuditStorage arrayStorage:
+                        {
+                            arrayStorage.Audits = audits;
+                            break;
+                        }
+                    }
 
                     return;
                 }
 
-                _logger.LogDebug(AuditEventId.NotAuditable, "Entity {EntityName} with state {EntityState} does not implemented by {Auditable}. So it will be ignored while is not auditable", entry.EntityType.Name, entry.State, nameof(IAuditStorage));
+                _logger.LogDebug(AuditEventId.NotAuditable, "Entity {EntityName} with state {EntityState} does not implemented by {Auditable}. So it will be ignored while is not auditable", entry.EntityType.Name, entry.State, nameof(IAuditJsonStorage));
             }
         }
 
-        internal Audit[] AppendAudit(IAuditStorage entityAuditable, Audit audit)
+        internal Audit[] AppendAudit(IAuditStorageBase entityAuditable, Audit audit)
         {
             Span<Audit> newAudits;
-            if (entityAuditable.Audits != null)
+            Span<Audit> existingAudits;
+            switch (entityAuditable)
             {
-                Span<Audit> existingAudits = entityAuditable.Audits.Value.Deserialize<Audit[]>(_options.JsonOptions);
-                if (_options.MaxStoredAudits is > 0 && existingAudits.Length >= _options.MaxStoredAudits.Value)
+                case IAuditJsonStorage { Audits: not null } jsonStorage:
                 {
-                    newAudits = new Audit[_options.MaxStoredAudits.Value];
-                    var startIndex = 0;
-                    if (existingAudits[0].Flag == AuditFlag.Created)
-                    {
-                        if (_options.MaxStoredAudits is 1)
-                        {
-                            // In this scenario, we have only one audit and it is created.
-                            // So we cannot add new audit to the list.
-                            throw new InvalidOperationException("Max stored audits cannot be 1 when the first audit has Created flag.");
-                        }
+                    existingAudits = jsonStorage.Audits.Value.Deserialize<Audit[]>(_options.JsonOptions);
+                    break;
+                }
+                case IAuditJsonStorage:
+                {
+                    newAudits = new Audit[1];
+                    newAudits[0] = audit;
+                    return newAudits.ToArray();
+                }
+                case IAuditStorage { Audits.Length: > 0 } arrayStorage:
+                {
+                    existingAudits = arrayStorage.Audits;
+                    break;
+                }
+                case IAuditStorage:
+                {
+                    newAudits = new Audit[1];
+                    newAudits[0] = audit;
+                    return newAudits.ToArray();
+                }
+                default:
+                {
+                    throw new NotSupportedException("Entity does not implemented by IAuditJsonStorage or IAuditStorage.");
+                }
+            }
 
-                        startIndex = 1;
-                        newAudits[0] = existingAudits[0];
+            if (_options.MaxStoredAudits is > 0 && existingAudits.Length >= _options.MaxStoredAudits.Value)
+            {
+                newAudits = new Audit[_options.MaxStoredAudits.Value];
+                var startIndex = 0;
+                if (existingAudits[0].Flag == AuditFlag.Created)
+                {
+                    if (_options.MaxStoredAudits is 1)
+                    {
+                        // In this scenario, we have only one audit and it is created.
+                        // So we cannot add new audit to the list.
+                        throw new InvalidOperationException("Max stored audits cannot be 1 when the first audit has Created flag.");
                     }
 
-                    startIndex = existingAudits.Length - _options.MaxStoredAudits.Value + startIndex;
-                    var adjustment = existingAudits[0].Flag == AuditFlag.Created ? 0 : 1;
-                    for (var i = startIndex + 1; i < existingAudits.Length; i++)
-                    {
-                        var index = i - startIndex;
-                        newAudits[index - adjustment] = existingAudits[i];
-                    }
-                }
-                else
-                {
-                    newAudits = new Audit[existingAudits.Length + 1];
-                    existingAudits.CopyTo(newAudits);
+                    startIndex = 1;
+                    newAudits[0] = existingAudits[0];
                 }
 
-                newAudits[^1] = audit;
+                startIndex = existingAudits.Length - _options.MaxStoredAudits.Value + startIndex;
+                var adjustment = existingAudits[0].Flag == AuditFlag.Created ? 0 : 1;
+                for (var i = startIndex + 1; i < existingAudits.Length; i++)
+                {
+                    var index = i - startIndex;
+                    newAudits[index - adjustment] = existingAudits[i];
+                }
             }
             else
             {
-                newAudits = new Audit[1];
-                newAudits[0] = audit;
+                newAudits = new Audit[existingAudits.Length + 1];
+                existingAudits.CopyTo(newAudits);
             }
+
+            newAudits[^1] = audit;
 
             return newAudits.ToArray();
         }
@@ -291,7 +324,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
                     continue;
 
                 var propertyName = propertyEntry.Metadata.Name;
-                if (propertyName.Equals(nameof(IAuditStorage.Audits), StringComparison.Ordinal) ||
+                if (propertyName.Equals(nameof(IAuditJsonStorage.Audits), StringComparison.Ordinal) ||
                     propertyName.Equals(nameof(IAuditCreateDate.CreateDate), StringComparison.Ordinal) ||
                     propertyName.Equals(nameof(IAuditUpdateDate.UpdateDate), StringComparison.Ordinal) ||
                     propertyName.Equals(nameof(IAuditDeleteDate.DeleteDate), StringComparison.Ordinal))
@@ -304,14 +337,14 @@ namespace R8.EntityFrameworkCore.AuditProvider
 
                 if (string.Equals(propertyName, nameof(IAuditSoftDelete.IsDeleted), StringComparison.Ordinal))
                 {
-                    var oldValue = !originalNull && (bool)propertyEntry.OriginalValue!;
-                    var newValue = !currentNull && (bool)propertyEntry.CurrentValue!;
-                    if (oldValue == false && newValue == true)
-                        deleted = true;
-                    else if (oldValue == true && newValue == false)
-                        deleted = false;
-                    else
-                        deleted = null;
+                    var isAlreadyDeleted = !originalNull && (bool)propertyEntry.OriginalValue!;
+                    var isNewlyDeleted = !currentNull && (bool)propertyEntry.CurrentValue!;
+                    deleted = isAlreadyDeleted switch
+                    {
+                        false when isNewlyDeleted => true,
+                        true when !isNewlyDeleted => false,
+                        _ => null
+                    };
 
                     continue;
                 }
@@ -344,12 +377,111 @@ namespace R8.EntityFrameworkCore.AuditProvider
                 var newString = GetValue(propertyEntry.CurrentValue, propertyType, currentNull);
                 var oldString = GetValue(propertyEntry.OriginalValue, propertyType, originalNull);
 
+                if (!currentNull && !originalNull && newString.HasValue && oldString.HasValue && IsEqual(newString.Value, oldString.Value))
+                    continue;
+
                 var auditChange = new AuditChange(propertyName, oldString, newString);
                 memory.Span[++lastIndex] = auditChange;
             }
 
             var array = memory[..(lastIndex + 1)];
             return (deleted, array);
+        }
+
+        private static bool IsEqual(JsonElement first, JsonElement second)
+        {
+            switch (first.ValueKind)
+            {
+                case JsonValueKind.Object:
+                {
+                    if (second.ValueKind != JsonValueKind.Object)
+                        return false;
+
+                    var firstObjs = first.EnumerateObject();
+                    var secondObjs = second.EnumerateObject();
+
+                    int firstCount = 0, secondCount = 0;
+
+                    while (firstObjs.MoveNext()) firstCount++;
+                    while (secondObjs.MoveNext()) secondCount++;
+
+                    if (firstCount != secondCount)
+                        return false;
+
+                    firstObjs = first.EnumerateObject(); // Re-enumerate
+                    secondObjs = second.EnumerateObject(); // Re-enumerate
+
+                    while (firstObjs.MoveNext())
+                    {
+                        var firstProp = firstObjs.Current;
+                        if (!second.TryGetProperty(firstProp.Name, out var secondProp) ||
+                            !IsEqual(firstProp.Value, secondProp))
+                        {
+                            return false;
+                        }
+                    }
+
+                    if (firstObjs is IDisposable firstObjsDisposable) firstObjsDisposable.Dispose();
+                    if (secondObjs is IDisposable secondObjsDisposable) secondObjsDisposable.Dispose();
+
+                    return true;
+                }
+                case JsonValueKind.Array:
+                {
+                    if (second.ValueKind != JsonValueKind.Array)
+                        return false;
+
+                    var array1 = first.EnumerateArray();
+                    var array2 = second.EnumerateArray();
+
+                    int firstArrayCount = 0, secondArrayCount = 0;
+
+                    while (array1.MoveNext()) firstArrayCount++;
+                    while (array2.MoveNext()) secondArrayCount++;
+
+                    if (firstArrayCount != secondArrayCount)
+                        return false;
+
+                    array1 = first.EnumerateArray(); // Re-enumerate
+                    array2 = second.EnumerateArray(); // Re-enumerate
+
+                    while (array1.MoveNext() && array2.MoveNext())
+                    {
+                        if (!IsEqual(array1.Current, array2.Current))
+                            return false;
+                    }
+
+                    if (array1 is IDisposable array1Disposable) array1Disposable.Dispose();
+                    if (array2 is IDisposable array2Disposable) array2Disposable.Dispose();
+
+                    return true;
+                }
+                case JsonValueKind.String:
+                {
+                    if (second.ValueKind != JsonValueKind.String)
+                        return false;
+
+                    return first.ValueEquals(second.GetString());
+                }
+                case JsonValueKind.Number:
+                {
+                    if (second.ValueKind != JsonValueKind.Number)
+                        return false;
+
+                    return first.GetDecimal() == second.GetDecimal();
+                }
+                case JsonValueKind.True:
+                case JsonValueKind.False:
+                {
+                    return first.GetBoolean() == second.GetBoolean();
+                }
+                case JsonValueKind.Null:
+                {
+                    return second.ValueKind == JsonValueKind.Null;
+                }
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
         }
 
         private JsonElement? GetValue(object? value, Type propertyType, bool isNull)

@@ -13,26 +13,26 @@ namespace R8.EntityFrameworkCore.AuditProvider.Abstractions
         /// Gets a <see cref="DateTime"/> that represents the time that changes made.
         /// </summary>
         [JsonPropertyName(JsonNames.Audit.DateTime)]
-        public DateTime DateTime { get; init; }
+        public DateTime DateTime { get; set; }
 
         /// <summary>
         /// Gets a flag that represents what happened to entity.
         /// </summary>
         [JsonPropertyName(JsonNames.Audit.Flag)]
-        public AuditFlag Flag { get; init; }
+        public AuditFlag Flag { get; set; }
 
         /// <summary>
         /// Gets the changes that made to entity.
         /// </summary>
         /// <remarks>This property only works when <see cref="Flag"/> is <see cref="AuditFlag.Changed"/></remarks>
         [JsonPropertyName(JsonNames.Audit.Changes)]
-        public AuditChange[]? Changes { get; init; }
+        public AuditChange[]? Changes { get; set; }
 
         /// <summary>
         /// Gets the user that made changes.
         /// </summary>
         [JsonPropertyName(JsonNames.Audit.User)]
-        public AuditUser? User { get; init; }
+        public AuditUser? User { get; set; }
 
         public static Audit Empty = new()
         {

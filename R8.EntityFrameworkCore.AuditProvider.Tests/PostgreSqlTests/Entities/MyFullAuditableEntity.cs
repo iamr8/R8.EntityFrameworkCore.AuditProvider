@@ -7,7 +7,7 @@ using R8.EntityFrameworkCore.AuditProvider.Tests.Entities;
 
 namespace R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.Entities
 {
-    public record MyFullAuditableEntity : IAggregateEntity, IAuditActivator, IAuditStorage, IAuditSoftDelete, IAuditCreateDate, IAuditUpdateDate, IAuditDeleteDate
+    public record MyFullAuditableEntity : IAggregateEntity, IAuditActivator, IAuditJsonStorage, IAuditSoftDelete, IAuditCreateDate, IAuditUpdateDate, IAuditDeleteDate
     {
         [Key, Column(TypeName = "serial")]
         public int Id { get; set; }
