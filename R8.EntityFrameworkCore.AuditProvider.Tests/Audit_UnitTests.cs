@@ -32,13 +32,13 @@ public class Audit_UnitTests
         {
             State = state;
             Entity = entity;
-            Members = members;
+            Members = members.OfType<PropertyEntry>().ToArray();
             EntityType = entity.GetType();
         }
 
         public EntityState State { get; set; }
         public object Entity { get; }
-        public IEnumerable<MemberEntry> Members { get; }
+        public PropertyEntry[] Members { get; }
         public Type EntityType { get; }
 
         public void DetectChanges()
@@ -77,7 +77,7 @@ public class Audit_UnitTests
         var entry = new MockingAuditEntityEntry(state, entity, Array.Empty<PropertyEntry>());
 
         var stopWatch = Stopwatch.StartNew();
-        await interceptor.AckAuditsAsync(entry, dbContext);
+        interceptor.AckAudits(entry, dbContext);
         stopWatch.Stop();
 
         _outputHelper.WriteLine($"Elapsed: {stopWatch.ElapsedMilliseconds}ms -or- {stopWatch.Elapsed.TotalMicroseconds()}μs");
@@ -95,11 +95,11 @@ public class Audit_UnitTests
         var entity = new MyAuditableEntity { Name = "Foo" };
         var members = entity.GetChangeTrackerMembers(dbContext);
         var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
-        await interceptor.AckAuditsAsync(entry, dbContext);
+        interceptor.AckAudits(entry, dbContext);
 
         members.Update(x => x.Name, "Bar");
         entry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
-        await interceptor.AckAuditsAsync(entry, dbContext);
+        interceptor.AckAudits(entry, dbContext);
 
         entity.Audits.Should().NotBeNull();
         var auditCollection = entity.GetAuditCollection();
@@ -135,11 +135,11 @@ public class Audit_UnitTests
         var entity = new MyAuditableEntity { Name = "Foo" };
         var members = entity.GetChangeTrackerMembers(dbContext);
         var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
-        await interceptor.AckAuditsAsync(entry, dbContext);
+        interceptor.AckAudits(entry, dbContext);
 
         members.Update(x => x.Name, "Bar");
         entry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
-        await interceptor.AckAuditsAsync(entry, dbContext);
+        interceptor.AckAudits(entry, dbContext);
 
 
         entity.Audits.Should().NotBeNull();
@@ -168,11 +168,11 @@ public class Audit_UnitTests
         var entity = new MyAuditableEntity { Name = "Foo" };
         var members = entity.GetChangeTrackerMembers(dbContext);
         var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
-        await interceptor.AckAuditsAsync(entry, dbContext);
+        interceptor.AckAudits(entry, dbContext);
         
         members.Update(x => x.Name, "Bar"); 
         entry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
-        await interceptor.AckAuditsAsync(entry, dbContext);
+        interceptor.AckAudits(entry, dbContext);
 
 
         entity.Audits.Should().NotBeNull();
@@ -195,11 +195,11 @@ public class Audit_UnitTests
         var entity = new MyAuditableEntity { Name = "Foo" };
         var members = entity.GetChangeTrackerMembers(dbContext);
         var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
-        await interceptor.AckAuditsAsync(entry, dbContext);
+        interceptor.AckAudits(entry, dbContext);
         
         members.Update(x => x.Name, "Bar");
         entry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
-        await interceptor.AckAuditsAsync(entry, dbContext);
+        interceptor.AckAudits(entry, dbContext);
 
 
         entity.Audits.Should().NotBeNull();
@@ -225,15 +225,15 @@ public class Audit_UnitTests
         var entity = new MyAuditableEntity { Name = "Foo" };
         var members = entity.GetChangeTrackerMembers(dbContext);
         var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
-        await interceptor.AckAuditsAsync(entry, dbContext);
+        interceptor.AckAudits(entry, dbContext);
 
         members.Update(x => x.Name, "Bar");
         entry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
-        await interceptor.AckAuditsAsync(entry, dbContext);
+        interceptor.AckAudits(entry, dbContext);
         
         members.Update(x => x.IsDeleted, true);
         entry = new MockingAuditEntityEntry(EntityState.Deleted, entity, members);
-        await interceptor.AckAuditsAsync(entry, dbContext);
+        interceptor.AckAudits(entry, dbContext);
 
         entity.Audits.Should().NotBeNull();
         var auditCollection = entity.GetAuditCollection();
@@ -258,15 +258,15 @@ public class Audit_UnitTests
         var entity = new MyAuditableEntity { Name = "Foo" };
         var members = entity.GetChangeTrackerMembers(dbContext);
         var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
-        await interceptor.AckAuditsAsync(entry, dbContext);
+        interceptor.AckAudits(entry, dbContext);
 
         members.Update(x => x.Name, "Bar");
         entry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
-        await interceptor.AckAuditsAsync(entry, dbContext);
+        interceptor.AckAudits(entry, dbContext);
         
         members.Update(x => x.IsDeleted, true);
         entry = new MockingAuditEntityEntry(EntityState.Deleted, entity, members);
-        await interceptor.AckAuditsAsync(entry, dbContext);
+        interceptor.AckAudits(entry, dbContext);
 
         entity.Audits.Should().NotBeNull();
         var auditCollection = entity.GetAuditCollection();
@@ -293,7 +293,7 @@ public class Audit_UnitTests
         var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
 
         var stopWatch = Stopwatch.StartNew();
-        await interceptor.AckAuditsAsync(entry, dbContext);
+        interceptor.AckAudits(entry, dbContext);
         stopWatch.Stop();
 
         entity.Audits.Should().BeNull();
@@ -315,7 +315,7 @@ public class Audit_UnitTests
         var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
 
         var stopWatch = Stopwatch.StartNew();
-        await interceptor.AckAuditsAsync(entry, dbContext);
+        interceptor.AckAudits(entry, dbContext);
         stopWatch.Stop();
 
 
@@ -348,7 +348,7 @@ public class Audit_UnitTests
         var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
 
         var stopWatch = Stopwatch.StartNew();
-        await interceptor.AckAuditsAsync(entry, dbContext);
+        interceptor.AckAudits(entry, dbContext);
         stopWatch.Stop();
 
         entity.Audits.Should().NotBeNull();
@@ -391,7 +391,7 @@ public class Audit_UnitTests
         var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
 
         var stopWatch = Stopwatch.StartNew();
-        await interceptor.AckAuditsAsync(entry, dbContext);
+        interceptor.AckAudits(entry, dbContext);
         stopWatch.Stop();
 
         entity.Audits.Should().NotBeNull();
@@ -438,7 +438,7 @@ public class Audit_UnitTests
         var entry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
 
         var stopWatch = Stopwatch.StartNew();
-        await interceptor.AckAuditsAsync(entry, dbContext);
+        interceptor.AckAudits(entry, dbContext);
         stopWatch.Stop();
 
 
@@ -475,7 +475,7 @@ public class Audit_UnitTests
         var entry = new MockingAuditEntityEntry(EntityState.Deleted, entity, members);
 
         var stopWatch = Stopwatch.StartNew();
-        await interceptor.AckAuditsAsync(entry, dbContext);
+        interceptor.AckAudits(entry, dbContext);
         stopWatch.Stop();
 
         entry.State.Should().Be(EntityState.Modified);
@@ -510,7 +510,7 @@ public class Audit_UnitTests
         var entry = new MockingAuditEntityEntry(EntityState.Deleted, entity, members);
 
         var stopWatch = Stopwatch.StartNew();
-        await interceptor.AckAuditsAsync(entry, dbContext);
+        interceptor.AckAudits(entry, dbContext);
         stopWatch.Stop();
 
 
@@ -551,7 +551,7 @@ public class Audit_UnitTests
         var entry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
 
         var stopWatch = Stopwatch.StartNew();
-        await interceptor.AckAuditsAsync(entry, dbContext);
+        interceptor.AckAudits(entry, dbContext);
         stopWatch.Stop();
 
 
@@ -596,7 +596,7 @@ public class Audit_UnitTests
         var entry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
 
         var stopWatch = Stopwatch.StartNew();
-        await interceptor.AckAuditsAsync(entry, dbContext);
+        interceptor.AckAudits(entry, dbContext);
         stopWatch.Stop();
 
 
@@ -632,7 +632,7 @@ public class Audit_UnitTests
         var entry = new MockingAuditEntityEntry(EntityState.Deleted, entity, members);
 
         var stopWatch = Stopwatch.StartNew();
-        await interceptor.AckAuditsAsync(entry, dbContext);
+        interceptor.AckAudits(entry, dbContext);
         stopWatch.Stop();
 
 
@@ -656,7 +656,7 @@ public class Audit_UnitTests
         var entry = new MockingAuditEntityEntry(EntityState.Modified, entity, propEntries);
 
         var stopWatch = Stopwatch.StartNew();
-        await interceptor.AckAuditsAsync(entry, dbContext);
+        interceptor.AckAudits(entry, dbContext);
         stopWatch.Stop();
 
         entity.Audits.Should().NotBeNull();
@@ -690,7 +690,7 @@ public class Audit_UnitTests
         var entry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
 
         var stopWatch = Stopwatch.StartNew();
-        await interceptor.AckAuditsAsync(entry, dbContext);
+        interceptor.AckAudits(entry, dbContext);
         stopWatch.Stop();
 
 
@@ -712,11 +712,11 @@ public class Audit_UnitTests
 
         var members = entity.GetChangeTrackerMembers(dbContext);
         var creationEntry = new MockingAuditEntityEntry(EntityState.Added, entity, members);
-        await interceptor.AckAuditsAsync(creationEntry, dbContext);
+        interceptor.AckAudits(creationEntry, dbContext);
         
         members.Update(x => x.Name, "Bar");
         var modificationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
-        await interceptor.AckAuditsAsync(modificationEntry, dbContext);
+        interceptor.AckAudits(modificationEntry, dbContext);
 
         var audits = entity.GetAuditCollection();
         audits.Should().NotBeNull();
@@ -980,7 +980,7 @@ public class Audit_UnitTests
         members.Update(x => x.Name, "Bar");
         members.Update(x => x.IsDeleted, true);
         var modificationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
-        await Assert.ThrowsAsync<NotSupportedException>(async () => await interceptor.AckAuditsAsync(modificationEntry, dbContext));
+        await Assert.ThrowsAsync<NotSupportedException>(async () => interceptor.AckAudits(modificationEntry, dbContext));
     }
 
     [Fact]
@@ -997,7 +997,7 @@ public class Audit_UnitTests
         members.Update(x => x.Name, "Bar");
         members.Update(x => x.IsDeleted, false);
         var modificationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
-        await Assert.ThrowsAsync<NotSupportedException>(async () => await interceptor.AckAuditsAsync(modificationEntry, dbContext));
+        await Assert.ThrowsAsync<NotSupportedException>(async () => interceptor.AckAudits(modificationEntry, dbContext));
     }
 
     [Fact]
@@ -1012,7 +1012,7 @@ public class Audit_UnitTests
         var entity = new MyAuditableEntity { Name = "Foo" };
         var members = entity.GetChangeTrackerMembers(dbContext);
         var modificationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
-        await interceptor.AckAuditsAsync(modificationEntry, dbContext);
+        interceptor.AckAudits(modificationEntry, dbContext);
     }
 
     [Fact]
@@ -1028,7 +1028,7 @@ public class Audit_UnitTests
         var members = entity.GetChangeTrackerMembers(dbContext);
         members.Update(x => x.Name, "Foo");
         var modificationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
-        await interceptor.AckAuditsAsync(modificationEntry, dbContext);
+        interceptor.AckAudits(modificationEntry, dbContext);
     }
 
     [Fact]
@@ -1044,7 +1044,7 @@ public class Audit_UnitTests
         var members = entity.GetChangeTrackerMembers(dbContext);
         members.Update(x => x.LastName, "Bar");
         var modificationEntry = new Audit_UnitTests.MockingAuditEntityEntry(EntityState.Modified, entity, members);
-        await interceptor.AckAuditsAsync(modificationEntry, dbContext);
+        interceptor.AckAudits(modificationEntry, dbContext);
     }
 
     [Fact]
@@ -1062,7 +1062,7 @@ public class Audit_UnitTests
         members.Update(x => x.LastName, "Bar");
         var modificationEntry = new Audit_UnitTests.MockingAuditEntityEntry(EntityState.Modified, entity, members);
         var stopWatch = Stopwatch.StartNew();
-        await interceptor.AckAuditsAsync(modificationEntry, dbContext);
+        interceptor.AckAudits(modificationEntry, dbContext);
         stopWatch.Stop();
 
 
@@ -1095,7 +1095,7 @@ public class Audit_UnitTests
         var members = entity.GetChangeTrackerMembers(dbContext);
         var modificationEntry = new Audit_UnitTests.MockingAuditEntityEntry(EntityState.Deleted, entity, members);
         var stopWatch = Stopwatch.StartNew();
-        await interceptor.AckAuditsAsync(modificationEntry, dbContext);
+        interceptor.AckAudits(modificationEntry, dbContext);
         stopWatch.Stop();
 
         modificationEntry.State.Should().Be(EntityState.Deleted);
@@ -1116,7 +1116,7 @@ public class Audit_UnitTests
         var members = entity.GetChangeTrackerMembers(dbContext);
         var modificationEntry = new Audit_UnitTests.MockingAuditEntityEntry(EntityState.Deleted, entity, members);
         var stopWatch = Stopwatch.StartNew();
-        await interceptor.AckAuditsAsync(modificationEntry, dbContext);
+        interceptor.AckAudits(modificationEntry, dbContext);
         stopWatch.Stop();
 
         modificationEntry.State.Should().Be(EntityState.Deleted);
@@ -1137,7 +1137,7 @@ public class Audit_UnitTests
         var members = entity.GetChangeTrackerMembers(dbContext);
         var modificationEntry = new Audit_UnitTests.MockingAuditEntityEntry(EntityState.Deleted, entity, members);
         var stopWatch = Stopwatch.StartNew();
-        await interceptor.AckAuditsAsync(modificationEntry, dbContext);
+        interceptor.AckAudits(modificationEntry, dbContext);
         stopWatch.Stop();
 
 
@@ -1158,7 +1158,7 @@ public class Audit_UnitTests
         members.Update(x => x.Name, "Bar");
         var modificationEntry = new Audit_UnitTests.MockingAuditEntityEntry(EntityState.Modified, entity, members);
         var stopWatch = Stopwatch.StartNew();
-        await interceptor.AckAuditsAsync(modificationEntry, dbContext);
+        interceptor.AckAudits(modificationEntry, dbContext);
         stopWatch.Stop();
 
 
@@ -1178,11 +1178,11 @@ public class Audit_UnitTests
         var members = entity.GetChangeTrackerMembers(dbContext);
         members.Update(x => x.Name, "Bar");
         var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
-        await interceptor.AckAuditsAsync(creationEntry, dbContext);
+        interceptor.AckAudits(creationEntry, dbContext);
 
         members.Update(x => x.Name, "Foo");
         var modificationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
-        await interceptor.AckAuditsAsync(modificationEntry, dbContext);
+        interceptor.AckAudits(modificationEntry, dbContext);
 
         var audits = entity.GetAuditCollection();
         audits.Should().NotBeNull();
@@ -1221,7 +1221,7 @@ public class Audit_UnitTests
         members.Update(x => x.Payload, JsonDocument.Parse(@"[{""name"": ""abood""}]"));
         var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
         var stopWatch = Stopwatch.StartNew();
-        await interceptor.AckAuditsAsync(creationEntry, dbContext);
+        interceptor.AckAudits(creationEntry, dbContext);
         stopWatch.Stop();
 
         var audits = entity.GetAuditCollection();
@@ -1259,7 +1259,7 @@ public class Audit_UnitTests
         members.Update(x => x.DateOffset, new DateTimeOffset(2022, 1, 1, 1, 1, 1, TimeSpan.FromHours(3)));
         var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
         var stopWatch = Stopwatch.StartNew();
-        await interceptor.AckAuditsAsync(creationEntry, dbContext);
+        interceptor.AckAudits(creationEntry, dbContext);
         stopWatch.Stop();
 
 
@@ -1312,7 +1312,7 @@ public class Audit_UnitTests
         members.Update(x => x.NullableInt, null);
         var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
         var stopWatch = Stopwatch.StartNew();
-        await interceptor.AckAuditsAsync(creationEntry, dbContext);
+        interceptor.AckAudits(creationEntry, dbContext);
         stopWatch.Stop();
 
 
@@ -1347,7 +1347,7 @@ public class Audit_UnitTests
         members.Update(x => x.NullableInt, 3);
         var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
         var stopWatch = Stopwatch.StartNew();
-        await interceptor.AckAuditsAsync(creationEntry, dbContext);
+        interceptor.AckAudits(creationEntry, dbContext);
         stopWatch.Stop();
 
 
@@ -1382,7 +1382,7 @@ public class Audit_UnitTests
         members.Update(x => x.Name, "iamr8");
         var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
         var stopWatch = Stopwatch.StartNew();
-        await interceptor.AckAuditsAsync(creationEntry, dbContext);
+        interceptor.AckAudits(creationEntry, dbContext);
         stopWatch.Stop();
 
 
@@ -1428,7 +1428,7 @@ public class Audit_UnitTests
         members.Update(x => x.ListOfIntegers, new List<int> { 1, 2, 3 });
         var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
         var stopWatch = Stopwatch.StartNew();
-        await interceptor.AckAuditsAsync(creationEntry, dbContext);
+        interceptor.AckAudits(creationEntry, dbContext);
         stopWatch.Stop();
 
 
@@ -1487,7 +1487,7 @@ public class Audit_UnitTests
         members.Update(x => x.Name, "Bar");
         var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
         var stopWatch = Stopwatch.StartNew();
-        await interceptor.AckAuditsAsync(creationEntry, dbContext);
+        interceptor.AckAudits(creationEntry, dbContext);
         stopWatch.Stop();
 
         entity.UpdateDate.Should().NotBeNull();
@@ -1518,7 +1518,7 @@ public class Audit_UnitTests
         members.Update(x => x.ListOfIntegers, new List<int> { 1, 2, 3 });
         var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
         var stopWatch = Stopwatch.StartNew();
-        await interceptor.AckAuditsAsync(creationEntry, dbContext);
+        interceptor.AckAudits(creationEntry, dbContext);
         stopWatch.Stop();
 
 
@@ -1545,7 +1545,7 @@ public class Audit_UnitTests
         var members = entity.GetChangeTrackerMembers(dbContext);
         var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
         var stopWatch = Stopwatch.StartNew();
-        await interceptor.AckAuditsAsync(creationEntry, dbContext);
+        interceptor.AckAudits(creationEntry, dbContext);
         stopWatch.Stop();
 
 
@@ -1569,7 +1569,7 @@ public class Audit_UnitTests
         members.Update(x => x.NullableListOfLongs, new List<long> { 1, 2, 3 });
         var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
         var stopWatch = Stopwatch.StartNew();
-        await interceptor.AckAuditsAsync(creationEntry, dbContext);
+        interceptor.AckAudits(creationEntry, dbContext);
         stopWatch.Stop();
 
         var audits = entity.GetAuditCollection();
@@ -1609,7 +1609,7 @@ public class Audit_UnitTests
         members.Update(x => x.Double, 5);
         var creationEntry = new MockingAuditEntityEntry(EntityState.Modified, entity, members);
         var stopWatch = Stopwatch.StartNew();
-        await interceptor.AckAuditsAsync(creationEntry, dbContext);
+        interceptor.AckAudits(creationEntry, dbContext);
         stopWatch.Stop();
 
 

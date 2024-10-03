@@ -13,15 +13,12 @@ namespace R8.EntityFrameworkCore.AuditProvider
         object Entity { get; }
     
         /// <inheritdoc cref="EntityEntry.Members"/>
-        IEnumerable<MemberEntry> Members { get; }
+        PropertyEntry[] Members { get; }
 
         /// <inheritdoc cref="IReadOnlyTypeBase.ClrType"/>
         Type EntityType { get; }
 
         /// <inheritdoc cref="EntityEntry.DetectChanges"/>
         void DetectChanges();
-    
-        /// <inheritdoc cref="EntityEntry.ReloadAsync"/>
-        Task ReloadAsync(CancellationToken cancellationToken = default);
     }
 }

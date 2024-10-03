@@ -29,15 +29,14 @@ namespace R8.EntityFrameworkCore.AuditProvider
 
         public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
         {
-            var entries = eventData.Context?.ChangeTracker.Entries();
-            if (entries != null)
+            var entries = eventData.Context?.ChangeTracker.Entries().ToArray();
+            if (entries is { Length: > 0})
             {
-                using var enumerator = entries.GetEnumerator();
-                while (enumerator.MoveNext())
+                for (var index = 0; index < entries.Length; index++)
                 {
-                    var entry = enumerator.Current;
+                    var entry = entries[index];
                     var auditEntry = new AuditEntityEntry(entry);
-                    await AckAuditsAsync(auditEntry, eventData.Context, cancellationToken).ConfigureAwait(false);
+                    AckAudits(auditEntry, eventData.Context);
                 }
             }
 
@@ -45,13 +44,12 @@ namespace R8.EntityFrameworkCore.AuditProvider
         }
 
         [DebuggerStepThrough]
-        internal async ValueTask AckAuditsAsync(IEntityEntry entry, DbContext? dbContext, CancellationToken cancellationToken = default)
+        internal void AckAudits(IEntityEntry entry, DbContext? dbContext)
         {
             if (entry.State is not (EntityState.Added or EntityState.Deleted or EntityState.Modified))
                 return;
 
             using var logScope = _logger.BeginScope("Storing audit for {EntityName} with state {EntityState}", entry.EntityType.Name, entry.State);
-            var propertyEntries = entry.Members.OfType<PropertyEntry>().ToArray();
             var entity = entry.Entity;
             if (entity is not IAuditActivator auditActivator)
                 return;
@@ -61,7 +59,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
             var hasStorage = auditActivator is IAuditStorageBase;
             AuditUser? auditUser = null;
             AuditFlag? auditFlag = null;
-            var finalChanges = Memory<AuditChange>.Empty;
+            var finalChanges = ReadOnlyMemory<AuditChange>.Empty;
             var canStore = hasStorage;
 
             if (dbContext != null && _options.UserProvider != null && hasStorage)
@@ -83,26 +81,30 @@ namespace R8.EntityFrameworkCore.AuditProvider
                 {
                     if (auditActivator is IAuditSoftDelete entitySoftDelete)
                     {
-                        if (entry.State == EntityState.Deleted)
+                        for (var index = 0; index < entry.Members.Length; index++)
                         {
-                            if (propertyEntries.Any(c => c.Metadata.Name.Equals(nameof(IAuditSoftDelete.IsDeleted), StringComparison.Ordinal) && ((bool)c.OriginalValue) == true))
+                            var propertyEntry = entry.Members[index];
+                            var originalValue = propertyEntry.OriginalValue;
+                            if (originalValue is not bool isDeleted)
+                                continue;
+
+                            if (propertyEntry.Metadata.Name.Equals(nameof(IAuditSoftDelete.IsDeleted), StringComparison.Ordinal) && isDeleted == true)
                                 return;
-
-                            // Set deleted flag
-                            await entry.ReloadAsync(cancellationToken).ConfigureAwait(false);
-                            entitySoftDelete.IsDeleted = true;
-                            entry.DetectChanges();
-                            entry.State = EntityState.Modified;
-
-                            PerformDeleteUndelete(entry, auditActivator, deleted: true, ref auditFlag, ref canStore, hasStorage, currentDateTime);
                         }
+
+                        // Set deleted flag
+                        entitySoftDelete.IsDeleted = true;
+                        entry.DetectChanges();
+                        entry.State = EntityState.Modified;
+
+                        PerformDeleteUndelete(entry, auditActivator, deleted: true, ref auditFlag, ref canStore, hasStorage, currentDateTime);
                     }
 
                     break;
                 }
                 case EntityState.Modified:
                 {
-                    var (deleted, changes) = GetChangedPropertyEntries(propertyEntries, hasStorage);
+                    var (deleted, changes) = GetChangedPropertyEntries(entry.Members, hasStorage);
                     if (deleted.HasValue)
                     {
                         if (changes.Length > 0)
@@ -159,7 +161,10 @@ namespace R8.EntityFrameworkCore.AuditProvider
                     return;
                 }
 
-                _logger.LogDebug(AuditEventId.NotAuditable, "Entity {EntityName} with state {EntityState} does not implemented by {Auditable}. So it will be ignored while is not auditable", entry.EntityType.Name, entry.State, nameof(IAuditJsonStorage));
+                if (!hasStorage)
+                {
+                    _logger.LogDebug(AuditEventId.NotAuditable, "Entity {EntityName} with state {EntityState} does not implemented by {Auditable}. So it will be ignored while is not auditable", entry.EntityType.Name, entry.State, nameof(IAuditJsonStorage));
+                }
             }
         }
 
@@ -171,6 +176,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
             {
                 case IAuditJsonStorage { Audits: not null } jsonStorage:
                 {
+                    // TODO: this can be bottleneck
                     existingAudits = jsonStorage.Audits.Value.Deserialize<Audit[]>(_options.JsonOptions);
                     break;
                 }
@@ -246,7 +252,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
             canStore = isStorage && _options.AuditFlagSupport.Created.HasFlag(AuditFlagState.Storage);
         }
 
-        private void PerformChanged(IEntityEntry entry, IAuditActivator auditActivator, Memory<AuditChange> changes, ref AuditFlag? auditFlag, ref bool canStore, ref Memory<AuditChange> finalChanges, bool isStorage, DateTime currentDateTime)
+        private void PerformChanged(IEntityEntry entry, IAuditActivator auditActivator, ReadOnlyMemory<AuditChange> changes, ref AuditFlag? auditFlag, ref bool canStore, ref ReadOnlyMemory<AuditChange> finalChanges, bool isStorage, DateTime currentDateTime)
         {
             if (_options.AuditFlagSupport.Changed.HasFlag(AuditFlagState.ActionDate))
             {
@@ -309,13 +315,14 @@ namespace R8.EntityFrameworkCore.AuditProvider
             _logger.LogDebug(auditFlag == AuditFlag.Deleted ? AuditEventId.Deleted : AuditEventId.UnDeleted, "Entity {EntityName} is marked as {AuditFlag}", entry.EntityType.Name, auditFlag);
         }
 
-        private (bool? Deleted, Memory<AuditChange> Changed) GetChangedPropertyEntries(PropertyEntry[] propertyEntries, bool hasAuditStorage)
+        private (bool? Deleted, ReadOnlyMemory<AuditChange> Changed) GetChangedPropertyEntries(PropertyEntry[] propertyEntries, bool hasAuditStorage)
         {
             Memory<AuditChange> memory = new AuditChange[propertyEntries.Length];
             var lastIndex = -1;
             bool? deleted = null;
-            foreach (var propertyEntry in propertyEntries)
+            for (var index = 0; index < propertyEntries.Length; index++)
             {
+                var propertyEntry = propertyEntries[index];
                 if (!propertyEntry.IsModified)
                     continue;
 
@@ -325,6 +332,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
 
                 var propertyName = propertyEntry.Metadata.Name;
                 if (propertyName.Equals(nameof(IAuditJsonStorage.Audits), StringComparison.Ordinal) ||
+                    propertyName.Equals(nameof(IAuditStorage.Audits), StringComparison.Ordinal) ||
                     propertyName.Equals(nameof(IAuditCreateDate.CreateDate), StringComparison.Ordinal) ||
                     propertyName.Equals(nameof(IAuditUpdateDate.UpdateDate), StringComparison.Ordinal) ||
                     propertyName.Equals(nameof(IAuditDeleteDate.DeleteDate), StringComparison.Ordinal))

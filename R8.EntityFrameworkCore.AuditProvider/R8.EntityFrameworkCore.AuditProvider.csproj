@@ -5,7 +5,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <EnableNETAnalyzers>true</EnableNETAnalyzers>
-        <Version>1.1.1</Version>
+        <Version>1.1.2</Version>
         <Authors>iamr8</Authors>
         <Description>A .NET package for Entity Framework, providing comprehensive change tracking with deep insights.</Description>
         <PackageId>R8.EntityFrameworkCore.AuditProvider</PackageId>

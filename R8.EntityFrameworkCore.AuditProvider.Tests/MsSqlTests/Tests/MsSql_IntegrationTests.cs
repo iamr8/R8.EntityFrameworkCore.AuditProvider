@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using R8.EntityFrameworkCore.AuditProvider.Abstractions;
 using R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Entities;
 using Xunit.Abstractions;
@@ -192,6 +193,50 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Tests
 
             // Arrange
             var audits = entity.GetAuditCollection();
+            audits.Should().NotBeEmpty();
+
+            audits.Should().HaveCount(2);
+
+            var lastAudit = audits.MaxBy(x => x.DateTime);
+            lastAudit.Flag.Should().Be(AuditFlag.Changed);
+
+            var lastChange = lastAudit.Changes[0];
+            lastChange.Column.Should().Be("Name");
+            lastChange.OldValue.Value.GetRawText().Should().Be("\"Original\"");
+            lastChange.NewValue.Value.GetRawText().Should().Be("\"Updated\"");
+        }
+        
+        [Fact(Skip = "Incomplete")]
+        public async Task Should_Update_When_Entity_IsNotTracked()
+        {
+            // Act
+            MyAuditableEntity entity;
+            await using (var scope1 = ServiceProvider.CreateAsyncScope())
+            {
+                await using var dbContext1 = scope1.ServiceProvider.GetRequiredService<MsSqlDbContext>();
+                entity = new MyAuditableEntity
+                {
+                    Name = "Original"
+                };
+                dbContext1.Add(entity);
+                await dbContext1.SaveChangesAsync();
+            }
+
+            await Task.Delay(500);
+
+            await using var scope2 = ServiceProvider.CreateAsyncScope();
+            await using var dbContext2 = scope2.ServiceProvider.GetRequiredService<MsSqlDbContext>();
+            var entity2 = await dbContext2.MyAuditableEntities.AsNoTracking().FirstAsync(x => x.Id == entity.Id);
+            entity2.Name = "Updated";
+
+            // var isTracked = dbContext2.Set<MyAuditableEntity>().Local.Any(x => x.Id == entity2.Id);
+            // var trackedEntity = dbContext2.Attach(entity2);
+            // var isTracked2 = dbContext2.Set<MyAuditableEntity>().Local.Any(x => x.Id == entity2.Id);
+            dbContext2.Update(entity2);
+            await dbContext2.SaveChangesAsync();
+
+            // Arrange
+            var audits = entity2.GetAuditCollection();
             audits.Should().NotBeEmpty();
 
             audits.Should().HaveCount(2);

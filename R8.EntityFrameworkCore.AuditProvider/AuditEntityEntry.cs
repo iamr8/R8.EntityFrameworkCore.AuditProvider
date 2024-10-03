@@ -10,6 +10,9 @@ namespace R8.EntityFrameworkCore.AuditProvider
         public AuditEntityEntry(EntityEntry entry)
         {
             _entry = entry;
+            Entity = _entry.Entity;
+            EntityType = _entry.Metadata.ClrType;
+            Members = _entry.Members.OfType<PropertyEntry>().ToArray();
         }
     
         public EntityState State
@@ -18,10 +21,9 @@ namespace R8.EntityFrameworkCore.AuditProvider
             set => _entry.State = value;
         }
 
-        public object Entity => _entry.Entity;
-        public Type EntityType => _entry.Metadata.ClrType;
-        public IEnumerable<MemberEntry> Members => _entry.Members.Cast<MemberEntry>();
+        public object Entity { get; }
+        public Type EntityType { get; }
+        public PropertyEntry[] Members { get; }
         public void DetectChanges() => _entry.DetectChanges();
-        public Task ReloadAsync(CancellationToken cancellationToken = default) => _entry.ReloadAsync(cancellationToken);
     }
 }

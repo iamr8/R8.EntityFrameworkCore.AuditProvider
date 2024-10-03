@@ -16,6 +16,12 @@ dotnet add package R8.EntityFrameworkCore.AuditProvider
 
 ---
 
+### Known Limitations
+
+The Interceptor does not support queries decorated with `.AsNoTracking()` since it is not possible to track changes on entities that are not being tracked.
+
+---
+
 ### Usage
 
 ```csharp

@@ -7,7 +7,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Tests
 {
     public class MsSqlTestFixture : IAsyncLifetime, IXunitLogProvider
     {
-        private readonly ServiceProvider _serviceProvider;
+        internal readonly ServiceProvider ServiceProvider;
 
         internal readonly MsSqlDbContext MsSqlDbContext;
 
@@ -15,7 +15,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Tests
 
         public MsSqlTestFixture()
         {
-            _serviceProvider = new ServiceCollection()
+            ServiceProvider = new ServiceCollection()
                 .AddLogging()
                 .AddXunitLogger(s => OnWriteLine?.Invoke(s), o =>
                 {
@@ -40,7 +40,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Tests
                     optionsBuilder.AddEntityFrameworkAuditProviderInterceptor(serviceProvider);
                 })
                 .BuildServiceProvider();
-            MsSqlDbContext = _serviceProvider.GetRequiredService<MsSqlDbContext>();
+            MsSqlDbContext = ServiceProvider.GetRequiredService<MsSqlDbContext>();
         }
 
         public async Task InitializeAsync()
@@ -57,7 +57,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Tests
         public async Task DisposeAsync()
         {
             await MsSqlDbContext.Database.EnsureDeletedAsync();
-            await _serviceProvider.DisposeAsync();
+            await ServiceProvider.DisposeAsync();
         }
     }
 }
