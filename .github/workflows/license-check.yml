@@ -1,0 +1,50 @@
+name: License check
+
+# Checks the licenses of the shipped libraries' NuGet dependencies (transitively) against an allowlist
+# in .github/allowed-licenses.json. Scoped to the two published packages (the main package and its
+# Abstractions), so dev/test-only dependencies (analyzers, test frameworks) that never ship are not
+# considered. Fails on a disallowed or unknown license.
+on:
+  push:
+    branches: [develop, master]
+  pull_request:
+    branches: [develop, master]
+
+concurrency:
+  group: license-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  licenses:
+    name: Dependency licenses
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            6.0.x
+            8.0.x
+            10.0.x
+
+      - name: Install nuget-license
+        run: |
+          dotnet tool install --global nuget-license
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      - name: Restore
+        run: |
+          dotnet restore R8.EntityFrameworkCore.AuditProvider.Abstractions/R8.EntityFrameworkCore.AuditProvider.Abstractions.csproj
+          dotnet restore R8.EntityFrameworkCore.AuditProvider/R8.EntityFrameworkCore.AuditProvider.csproj
+
+      # -mapping resolves packages that report a license URL instead of an SPDX id (e.g. ErrorProne.NET,
+      # which is MIT). Analyzers are dev-only (PrivateAssets) and don't ship, but are still resolved here.
+      - name: Check Abstractions licenses against the allowlist
+        run: nuget-license -i R8.EntityFrameworkCore.AuditProvider.Abstractions/R8.EntityFrameworkCore.AuditProvider.Abstractions.csproj -t -a .github/allowed-licenses.json -mapping .github/license-url-mappings.json -o jsonPretty
+
+      - name: Check main package licenses against the allowlist
+        run: nuget-license -i R8.EntityFrameworkCore.AuditProvider/R8.EntityFrameworkCore.AuditProvider.csproj -t -a .github/allowed-licenses.json -mapping .github/license-url-mappings.json -o jsonPretty

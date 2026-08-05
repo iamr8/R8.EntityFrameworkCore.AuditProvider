@@ -1,0 +1,213 @@
+name: Release Main Package
+
+# Releases the R8.EntityFrameworkCore.AuditProvider (main) package.
+#
+# Triggered when develop is merged into master (master is protected — no direct pushes) AND the change
+# touches the main package project, or manually via workflow_dispatch. The `check` job compares the
+# csproj <Version> against the latest version already on NuGet: only if it is strictly newer does the
+# pipeline build, publish the GitHub release, and push to NuGet. Otherwise it logs a warning and skips.
+#
+# This package depends on the Abstractions package (via <ProjectReference>, emitted as a pinned NuGet
+# dependency). When a release also needs a new Abstractions version, release the Abstractions package
+# (release-abstractions.yml) too — and make sure it reaches NuGet, since consumers restore it from there.
+on:
+  push:
+    branches: [master]
+    paths:
+      - "R8.EntityFrameworkCore.AuditProvider/**"
+  workflow_dispatch:
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CSPROJ: R8.EntityFrameworkCore.AuditProvider/R8.EntityFrameworkCore.AuditProvider.csproj
+  PKG_ID: r8.entityframeworkcore.auditprovider
+  # Leading digit anchors the glob to the main package and excludes the Abstractions nupkg, whose id
+  # shares this prefix. (Only the main package is packed in this workflow, but the anchor is defensive.)
+  PKG_GLOB: R8.EntityFrameworkCore.AuditProvider.[0-9]*.nupkg
+  TAG_PREFIX: v
+  # Test database password. Set the TEST_DB_PASSWORD repository secret (SQL Server complexity: 8+ chars,
+  # 3 of upper/lower/digit/symbol). The test fixtures read this same env var.
+  TEST_DB_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
+
+jobs:
+  check:
+    name: Check version is newer
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      should_release: ${{ steps.check.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compare csproj version against the latest published on NuGet
+        id: check
+        run: |
+          set -euo pipefail
+          VERSION=$(grep -oPm1 '(?<=<Version>)[^<]+' "$CSPROJ" || true)
+          if [ -z "$VERSION" ]; then echo "::error::Could not read <Version> from $CSPROJ"; exit 1; fi
+
+          RESP=$(curl -s "https://api.nuget.org/v3-flatcontainer/${PKG_ID}/index.json" || true)
+          LATEST=$(echo "$RESP" | jq -r '.versions[]? // empty' 2>/dev/null | sort -V | tail -1)
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "csproj version: $VERSION; latest on NuGet: ${LATEST:-<none>}"
+
+          if [ -z "$LATEST" ]; then
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          elif [ "$VERSION" = "$LATEST" ]; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Release skipped::Version $VERSION is already the latest on NuGet; skipping. Bump <Version> to release."
+          else
+            TOP=$(printf '%s\n%s\n' "$VERSION" "$LATEST" | sort -V | tail -1)
+            if [ "$TOP" = "$VERSION" ]; then
+              echo "should_release=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "should_release=false" >> "$GITHUB_OUTPUT"
+              echo "::warning title=Release skipped::Version $VERSION is not newer than the latest published ($LATEST); skipping."
+            fi
+          fi
+
+  build:
+    name: Build, test & pack
+    needs: check
+    if: ${{ needs.check.outputs.should_release == 'true' }}
+    runs-on: ubuntu-latest
+
+    # Integration tests hit a real SQL Server and PostgreSQL on the fixture-hard-coded ports/credentials.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ${{ env.TEST_DB_PASSWORD }}
+        ports:
+          - 54322:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: ${{ env.TEST_DB_PASSWORD }}
+        ports:
+          - 14331:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -Q \"SELECT 1\" -b"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 20
+          --health-start-period 30s
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # full history so SourceLink embeds correct commit info
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            6.0.x
+            8.0.x
+            10.0.x
+
+      - name: Restore
+        run: dotnet restore R8.sln
+
+      - name: Build
+        run: dotnet build R8.sln -c Release --no-restore -p:ContinuousIntegrationBuild=true
+
+      - name: Test net6.0
+        run: dotnet test R8.EntityFrameworkCore.AuditProvider.Tests/R8.EntityFrameworkCore.AuditProvider.Tests.csproj -c Release -f net6.0 --no-build
+
+      - name: Test net8.0
+        run: dotnet test R8.EntityFrameworkCore.AuditProvider.Tests/R8.EntityFrameworkCore.AuditProvider.Tests.csproj -c Release -f net8.0 --no-build
+
+      - name: Test net10.0
+        run: dotnet test R8.EntityFrameworkCore.AuditProvider.Tests/R8.EntityFrameworkCore.AuditProvider.Tests.csproj -c Release -f net10.0 --no-build
+
+      - name: Pack
+        run: dotnet pack "$CSPROJ" -c Release --no-build -o ./artifacts
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: nuget-package-main
+          path: ./artifacts/*.*nupkg
+          if-no-files-found: error
+
+  github-release:
+    name: Publish GitHub release
+    needs: [check, build]
+    if: ${{ needs.check.outputs.should_release == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the git tag and GitHub release
+    environment:
+      name: github-release
+      url: https://github.com/${{ github.repository }}/releases/tag/v${{ needs.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Download package artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: nuget-package-main
+          path: ./artifacts
+
+      - name: Tag and create GitHub release
+        env:
+          TAG: ${{ env.TAG_PREFIX }}${{ needs.check.outputs.version }}
+          VERSION: ${{ needs.check.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git tag "$TAG"
+          git push origin "$TAG"
+          gh release create "$TAG" --title "v$VERSION" --generate-notes ./artifacts/*.*nupkg
+
+  publish-nuget:
+    name: Push to NuGet
+    needs: [check, build, github-release]
+    if: ${{ needs.check.outputs.should_release == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # mint the GitHub OIDC token for NuGet Trusted Publishing
+    environment:
+      name: nuget
+      url: https://www.nuget.org/packages/R8.EntityFrameworkCore.AuditProvider
+    steps:
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Download package artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: nuget-package-main
+          path: ./artifacts
+
+      # Exchange the OIDC token for a short-lived (1 h) API key immediately before pushing. This package
+      # must have NuGet Trusted Publishing configured for this account; alternatively, replace this step
+      # with a NUGET_API_KEY secret and pass it to the push command below.
+      - name: NuGet login (OIDC → short-lived API key)
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Push to NuGet
+        run: dotnet nuget push "./artifacts/$PKG_GLOB" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}

@@ -1,0 +1,51 @@
+# CodeQL security + quality scanning.
+#
+# To get suggested fixes as PRs/commits: enable **Copilot Autofix** for code scanning in
+#   Settings → Code security and analysis → "Code scanning" → CodeQL → Copilot Autofix.
+# With it on, CodeQL alerts raised on pull requests get an auto-generated fix rendered as a
+# committable suggestion, and alerts on the default branch expose a "Generate fix" → "Create PR"
+# action in the Security tab. This is a repository setting (not expressible in this YAML); the
+# pull_request trigger below is what lets Autofix propose fixes on incoming changes.
+
+name: CodeQL
+
+on:
+  push:
+    branches: [develop, master]
+  pull_request:
+    branches: [develop, master]
+  schedule:
+    - cron: "0 6 * * 1" # weekly, Monday 06:00 UTC
+
+jobs:
+  analyze:
+    name: Analyze (C#)
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            6.0.x
+            8.0.x
+            10.0.x
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: csharp
+          queries: security-and-quality
+
+      - name: Build
+        run: dotnet build R8.sln -c Release
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:csharp"
