@@ -122,14 +122,15 @@ jobs:
       - name: Build
         run: dotnet build R8.sln -c Release --no-restore -p:ContinuousIntegrationBuild=true
 
+      # net6.0 = xunit v2 (VSTest); net8.0/net10.0 = xunit.v3 self-running executable (run directly).
       - name: Test net6.0
         run: dotnet test R8.EntityFrameworkCore.AuditProvider.Tests/R8.EntityFrameworkCore.AuditProvider.Tests.csproj -c Release -f net6.0 --no-build
 
       - name: Test net8.0
-        run: dotnet test R8.EntityFrameworkCore.AuditProvider.Tests/R8.EntityFrameworkCore.AuditProvider.Tests.csproj -c Release -f net8.0 --no-build
+        run: dotnet run --project R8.EntityFrameworkCore.AuditProvider.Tests/R8.EntityFrameworkCore.AuditProvider.Tests.csproj -c Release -f net8.0 --no-build
 
       - name: Test net10.0
-        run: dotnet test R8.EntityFrameworkCore.AuditProvider.Tests/R8.EntityFrameworkCore.AuditProvider.Tests.csproj -c Release -f net10.0 --no-build
+        run: dotnet run --project R8.EntityFrameworkCore.AuditProvider.Tests/R8.EntityFrameworkCore.AuditProvider.Tests.csproj -c Release -f net10.0 --no-build
 
       - name: Pack
         run: dotnet pack "$CSPROJ" -c Release --no-build -o ./artifacts

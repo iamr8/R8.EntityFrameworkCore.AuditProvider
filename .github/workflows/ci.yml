@@ -73,14 +73,18 @@ jobs:
       - name: Build
         run: dotnet build R8.sln -c Release --no-restore -p:ContinuousIntegrationBuild=true
 
+      # net6.0 uses xunit v2 (VSTest): dotnet test + the trx logger.
       - name: Test net6.0
         run: dotnet test R8.EntityFrameworkCore.AuditProvider.Tests/R8.EntityFrameworkCore.AuditProvider.Tests.csproj -c Release -f net6.0 --no-build --logger "trx;LogFileName=net6.trx" --results-directory test-results
 
+      # net8.0/net10.0 use xunit.v3, which builds a self-running Microsoft.Testing.Platform executable.
+      # Run it directly (dotnet run -- ...) with xunit.v3's native "-trx <file>" so the command is
+      # independent of the SDK's dotnet-test VSTest/MTP routing.
       - name: Test net8.0
-        run: dotnet test R8.EntityFrameworkCore.AuditProvider.Tests/R8.EntityFrameworkCore.AuditProvider.Tests.csproj -c Release -f net8.0 --no-build --logger "trx;LogFileName=net8.trx" --results-directory test-results
+        run: dotnet run --project R8.EntityFrameworkCore.AuditProvider.Tests/R8.EntityFrameworkCore.AuditProvider.Tests.csproj -c Release -f net8.0 --no-build -- -trx test-results/net8.trx
 
       - name: Test net10.0
-        run: dotnet test R8.EntityFrameworkCore.AuditProvider.Tests/R8.EntityFrameworkCore.AuditProvider.Tests.csproj -c Release -f net10.0 --no-build --logger "trx;LogFileName=net10.trx" --results-directory test-results
+        run: dotnet run --project R8.EntityFrameworkCore.AuditProvider.Tests/R8.EntityFrameworkCore.AuditProvider.Tests.csproj -c Release -f net10.0 --no-build -- -trx test-results/net10.trx
 
       - name: Publish test report
         uses: dorny/test-reporter@v3
