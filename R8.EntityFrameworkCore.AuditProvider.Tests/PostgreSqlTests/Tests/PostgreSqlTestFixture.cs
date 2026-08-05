@@ -1,4 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
+#if NET8_0_OR_GREATER
+using Microsoft.EntityFrameworkCore.Diagnostics;
+#endif
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using R8.XunitLogger;
@@ -7,7 +10,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.Tests
 {
     public class PostgreSqlTestFixture : IAsyncLifetime, IXunitLogProvider
     {
-        private readonly ServiceProvider _serviceProvider;
+        internal readonly ServiceProvider ServiceProvider;
 
         internal readonly PostgreSqlDbContext PostgreSqlDbContext;
 
@@ -15,7 +18,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.Tests
 
         public PostgreSqlTestFixture()
         {
-            _serviceProvider = new ServiceCollection()
+            ServiceProvider = new ServiceCollection()
                 .AddLogging()
                 .AddXunitLogger(s => OnWriteLine?.Invoke(s), o =>
                 {
@@ -36,13 +39,25 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.Tests
                 .AddDbContext<PostgreSqlDbContext>((serviceProvider, optionsBuilder) =>
                 {
                     optionsBuilder.UseNpgsql(PostgreSqlDbContextFactory.ConnectionString);
+#if NET8_0_OR_GREATER
+                    // EF Core 9+ throws PendingModelChangesWarning when the model differs from the last
+                    // migration snapshot. The migrations were authored under EF 7; the diff is spurious
+                    // across EF major versions, so ignore it in tests (the schema is created correctly).
+                    optionsBuilder.ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning));
+#endif
                     optionsBuilder.AddEntityFrameworkAuditProviderInterceptor(serviceProvider);
                 })
                 .BuildServiceProvider();
-            PostgreSqlDbContext = _serviceProvider.GetRequiredService<PostgreSqlDbContext>();
+            PostgreSqlDbContext = ServiceProvider.GetRequiredService<PostgreSqlDbContext>();
         }
 
-        public async Task InitializeAsync()
+        public async
+#if NET8_0_OR_GREATER
+            ValueTask
+#else
+            Task
+#endif
+            InitializeAsync()
         {
             var pm = await PostgreSqlDbContext.Database.GetPendingMigrationsAsync();
             var pendingMigrations = pm.ToArray();
@@ -53,10 +68,16 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.Tests
                 await PostgreSqlDbContext.Database.MigrateAsync();
         }
 
-        public async Task DisposeAsync()
+        public async
+#if NET8_0_OR_GREATER
+            ValueTask
+#else
+            Task
+#endif
+            DisposeAsync()
         {
             await PostgreSqlDbContext.Database.EnsureDeletedAsync();
-            await _serviceProvider.DisposeAsync();
+            await ServiceProvider.DisposeAsync();
         }
     }
 }

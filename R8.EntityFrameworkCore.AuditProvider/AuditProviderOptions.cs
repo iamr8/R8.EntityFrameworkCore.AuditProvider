@@ -6,6 +6,9 @@ using R8.EntityFrameworkCore.AuditProvider.Abstractions;
 
 namespace R8.EntityFrameworkCore.AuditProvider
 {
+    /// <summary>
+    /// Options that configure the Entity Framework Core audit provider.
+    /// </summary>
     public class AuditProviderOptions
     {
         /// <summary>

@@ -6,6 +6,9 @@ using R8.EntityFrameworkCore.AuditProvider.Abstractions;
 
 namespace R8.EntityFrameworkCore.AuditProvider
 {
+    /// <summary>
+    /// Extension methods for registering the Entity Framework Core audit provider and its interceptor.
+    /// </summary>
     public static class EntityFrameworkAuditProviderExtensions
     {
         /// <summary>
@@ -32,9 +35,13 @@ namespace R8.EntityFrameworkCore.AuditProvider
         /// </summary>
         /// <param name="builder">A <see cref="DbContextOptionsBuilder"/> to add interceptor to.</param>
         /// <param name="serviceProvider">A <see cref="IServiceProvider"/> to get <see cref="EntityFrameworkAuditProviderInterceptor"/> from.</param>
+        /// <exception cref="InvalidOperationException">Thrown when <see cref="EntityFrameworkAuditProviderInterceptor"/> is not registered in service provider.</exception>
         public static DbContextOptionsBuilder AddEntityFrameworkAuditProviderInterceptor(this DbContextOptionsBuilder builder, IServiceProvider serviceProvider)
         {
-            builder.AddInterceptors(serviceProvider.GetService<EntityFrameworkAuditProviderInterceptor>());
+            var interceptor = serviceProvider.GetService<EntityFrameworkAuditProviderInterceptor>();
+            if (interceptor == null)
+                throw new InvalidOperationException("EntityFrameworkAuditProviderInterceptor is not registered in service provider.");
+            builder.AddInterceptors(interceptor);
             return builder;
         }
     }

@@ -2,6 +2,9 @@ using R8.EntityFrameworkCore.AuditProvider.Abstractions;
 
 namespace R8.EntityFrameworkCore.AuditProvider
 {
+    /// <summary>
+    /// Controls how a given kind of audit change is stored: excluded, as an action date, and/or in JSON storage.
+    /// </summary>
     [Flags]
     public enum AuditFlagState
     {
@@ -9,12 +12,12 @@ namespace R8.EntityFrameworkCore.AuditProvider
         /// Will be excluded from entire audit process.
         /// </summary>
         Excluded = 0,
-        
+
         /// <summary>
         /// Will be included only when relevant interface is implemented. (e.g. <see cref="IAuditCreateDate"/>, <see cref="IAuditUpdateDate"/>, <see cref="IAuditDeleteDate"/>)
         /// </summary>
         ActionDate = 1,
-        
+
         /// <summary>
         /// Will be included only when <see cref="IAuditJsonStorage"/> is implemented.
         /// </summary>

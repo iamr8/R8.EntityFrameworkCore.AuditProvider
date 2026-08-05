@@ -1,0 +1,11 @@
+root = true
+
+[*.cs]
+# Meziantou.Analyzer tuning for the audit interceptor. These are style/maintainability suggestions;
+# the interceptor is a stable, production hot-path and is intentionally not refactored to satisfy them.
+# MA0051: method is too long — the change-tracking methods are inherently long and cohesive.
+dotnet_diagnostic.MA0051.severity = none
+# MA0026: fix TODO comment — TODOs are tracked, they should not fail the build.
+dotnet_diagnostic.MA0026.severity = none
+# MA0015: use a parameter name for ArgumentException — kept as-is to avoid altering exception messages.
+dotnet_diagnostic.MA0015.severity = none

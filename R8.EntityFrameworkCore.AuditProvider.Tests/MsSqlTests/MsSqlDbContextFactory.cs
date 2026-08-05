@@ -5,8 +5,12 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests
 {
     public class MsSqlDbContextFactory : IDesignTimeDbContextFactory<MsSqlDbContext>
     {
-        public static string ConnectionString => 
-            "Server=localhost,14331;Database=r8-audit-test;User ID=sa;Password=MyPassWoRD@#$;Trusted_Connection=false;Integrated Security=false;MultipleActiveResultSets=true;Persist Security Info=False;Encrypt=False";
+        // Password comes from the TEST_DB_PASSWORD env var in CI (set from a GitHub secret); falls back to
+        // a local default so `dotnet test` works out of the box against a local container.
+        private static string Password => Environment.GetEnvironmentVariable("TEST_DB_PASSWORD") ?? "MyPassWoRD@#$";
+
+        public static string ConnectionString =>
+            $"Server=localhost,14331;Database=r8-audit-test;User ID=sa;Password={Password};Trusted_Connection=false;Integrated Security=false;MultipleActiveResultSets=true;Persist Security Info=False;Encrypt=False";
 
         public DbContextOptions<MsSqlDbContext> GetOptions()
         {

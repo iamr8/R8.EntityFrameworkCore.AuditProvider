@@ -5,6 +5,11 @@ namespace R8.EntityFrameworkCore.AuditProvider
     /// </summary>
     public class AuditProviderUser
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="AuditProviderUser"/> class.
+        /// </summary>
+        /// <param name="userId">The id of the user that made the change.</param>
+        /// <param name="additionalData">Optional additional data to store alongside the user id.</param>
         public AuditProviderUser(string userId, IDictionary<string, string>? additionalData = null)
         {
             UserId = userId;

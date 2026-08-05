@@ -10,7 +10,6 @@ using R8.EntityFrameworkCore.AuditProvider.Abstractions;
 using R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests;
 using R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.Entities;
 using R8.XunitLogger;
-using Xunit.Abstractions;
 
 namespace R8.EntityFrameworkCore.AuditProvider.Tests;
 

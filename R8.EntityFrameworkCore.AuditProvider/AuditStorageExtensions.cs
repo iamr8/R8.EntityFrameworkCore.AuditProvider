@@ -3,6 +3,9 @@ using R8.EntityFrameworkCore.AuditProvider.Abstractions;
 
 namespace R8.EntityFrameworkCore.AuditProvider
 {
+    /// <summary>
+    /// Extension methods for reading the stored audit collection from an audited entity.
+    /// </summary>
     public static class AuditStorageExtensions
     {
         /// <summary>
@@ -20,7 +23,6 @@ namespace R8.EntityFrameworkCore.AuditProvider
         /// Deserializes the audit collection.
         /// </summary>
         /// <param name="entity">An entity that has been audited.</param>
-        /// <typeparam name="TEntity">A type of entity that has been audited.</typeparam>
         /// <returns>An instance of <see cref="AuditCollection"/> that contains all audits.</returns>
         public static AuditCollection? GetAuditCollection(this IAuditStorage entity)
         {
