@@ -37,7 +37,7 @@ public class Audit_UnitTests
 
         public EntityState State { get; set; }
         public object Entity { get; }
-        public PropertyEntry[] Members { get; }
+        public IEnumerable<MemberEntry> Members { get; }
         public Type EntityType { get; }
 
         public void DetectChanges()
