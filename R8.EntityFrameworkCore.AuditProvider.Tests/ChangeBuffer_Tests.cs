@@ -152,5 +152,55 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests
             last.Changes!.Length.Should().Be(changedCount, "every changed property must be recorded exactly once");
             last.Changes!.Select(c => c.Column).Distinct().Count().Should().Be(changedCount, "no duplicates");
         }
+
+        [Fact]
+        public void Concurrent_saves_forcing_buffer_growth_never_throw_or_corrupt()
+        {
+            // Hammer the shared interceptor (and ArrayPool.Shared) from many threads at once, each save
+            // forcing a different number of buffer growths (1..64 changes). Every save uses its own
+            // DbContext/entity, so any cross-talk would come from the pooled buffers being rented/returned
+            // under contention. Asserts every save records exactly its own change set — no loss, no
+            // duplication, no throw — across thousands of concurrent, growth-inducing saves.
+            AuditProviderConfiguration.JsonOptions ??= new AuditProviderOptions().JsonOptions;
+
+            var interceptor = new EntityFrameworkAuditProviderInterceptor(
+                new AuditProviderOptions(), Substitute.For<IServiceProvider>(),
+                NullLogger<EntityFrameworkAuditProviderInterceptor>.Instance);
+
+            const int threads = 32;
+            const int iterationsPerThread = 100;
+
+            var tasks = Enumerable.Range(0, threads).Select(t => Task.Run(() =>
+            {
+                var changeCount = (t % 64) + 1; // 1..64 — spans several buffer growth boundaries
+                for (var i = 0; i < iterationsPerThread; i++)
+                {
+                    using var db = new WideDbContext();
+                    var entity = new WideAuditEntity { Id = 1 };
+                    db.Attach(entity);
+                    var entry = db.Entry(entity);
+
+                    var marked = 0;
+                    foreach (var p in entry.Properties)
+                    {
+                        if (marked >= changeCount || !p.Metadata.Name.StartsWith("P"))
+                            continue;
+                        p.CurrentValue = "v" + marked;
+                        marked++;
+                    }
+
+                    var mock = new Audit_UnitTests.MockingAuditEntityEntry(EntityState.Modified, entity, entry.Members);
+                    interceptor.AckAudits(mock, db);
+
+                    var audits = entity.GetAuditCollection();
+                    var recorded = audits!.MaxBy(x => x.DateTime).Changes!;
+                    if (recorded.Length != changeCount || recorded.Select(c => c.Column).Distinct().Count() != changeCount)
+                        throw new Exception($"corruption: expected {changeCount} distinct changes, got {recorded.Length} ({recorded.Select(c => c.Column).Distinct().Count()} distinct)");
+                }
+            })).ToArray();
+
+            // WaitAll surfaces any task's assertion/exception as an AggregateException -> test fails.
+            Task.WaitAll(tasks);
+        }
     }
 }
