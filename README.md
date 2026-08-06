@@ -8,7 +8,7 @@ A .NET package for Entity Framework, providing comprehensive change tracking wit
 
 Targets `net6.0`, `net8.0`, and `net10.0`. The interceptor is registered as a thread-safe singleton, so a single registration is safe to share across all your DbContexts.
 
-[![Nuget](https://img.shields.io/nuget/vpre/R8.EntityFrameworkCore.AuditProvider)](https://www.nuget.org/packages/R8.EntityFrameworkCore.AuditProvider/) ![Nuget](https://img.shields.io/nuget/dt/R8.EntityFrameworkCore.AuditProvider) ![Commit](https://img.shields.io/github/last-commit/iamr8/R8.EntityFrameworkCore.AuditProvider)
+[![Nuget](https://img.shields.io/nuget/vpre/R8.EntityFrameworkCore.AuditProvider)](https://www.nuget.org/packages/R8.EntityFrameworkCore.AuditProvider/) ![Nuget](https://img.shields.io/nuget/dt/R8.EntityFrameworkCore.AuditProvider) ![Commit](https://img.shields.io/github/last-commit/iamr8/R8.EntityFrameworkCore.AuditProvider) ![Tests](https://img.shields.io/badge/tests-413%20passed-success)
 
 ### Installation
 
