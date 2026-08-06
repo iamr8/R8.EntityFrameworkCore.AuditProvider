@@ -27,9 +27,9 @@ permissions:
 env:
   CSPROJ: R8.EntityFrameworkCore.AuditProvider/R8.EntityFrameworkCore.AuditProvider.csproj
   PKG_ID: r8.entityframeworkcore.auditprovider
-  # Leading digit anchors the glob to the main package and excludes the Abstractions nupkg, whose id
-  # shares this prefix. (Only the main package is packed in this workflow, but the anchor is defensive.)
-  PKG_GLOB: R8.EntityFrameworkCore.AuditProvider.[0-9]*.nupkg
+  # Only the main package is packed in this workflow, so a plain *.nupkg is unambiguous. (dotnet nuget
+  # push only expands * and ?, not character classes like [0-9], so the glob must avoid them.)
+  PKG_GLOB: "*.nupkg"
   TAG_PREFIX: v
   # Test database password. Set the TEST_DB_PASSWORD repository secret (SQL Server complexity: 8+ chars,
   # 3 of upper/lower/digit/symbol). The test fixtures read this same env var.
@@ -173,9 +173,14 @@ jobs:
           VERSION: ${{ needs.check.outputs.version }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          git tag "$TAG"
-          git push origin "$TAG"
-          gh release create "$TAG" --title "v$VERSION" --generate-notes ./artifacts/*.*nupkg
+          # Idempotent: tolerate an existing tag/release so a re-run after a later-stage failure recovers.
+          git tag "$TAG" || echo "tag $TAG already exists locally"
+          git push origin "$TAG" || echo "tag $TAG already on origin"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" ./artifacts/*.*nupkg --clobber
+          else
+            gh release create "$TAG" --title "v$VERSION" --generate-notes ./artifacts/*.*nupkg
+          fi
 
   publish-nuget:
     name: Push to NuGet
