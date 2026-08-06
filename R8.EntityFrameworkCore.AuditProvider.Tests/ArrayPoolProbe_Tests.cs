@@ -16,7 +16,7 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests
         [Fact]
         public void EntityEntry_Members_is_not_countable_so_a_fixed_buffer_cannot_be_sized_from_it()
         {
-            using var db = new PostgreSqlDbContextFactory().CreateDbContext(System.Array.Empty<string>());
+            using var db = new PostgreSqlDbContextFactory().CreateDbContext(Array.Empty<string>());
             var entry = db.Entry(new MyAuditableEntity { Name = "x" });
 
             IEnumerable<MemberEntry> members = entry.Members;

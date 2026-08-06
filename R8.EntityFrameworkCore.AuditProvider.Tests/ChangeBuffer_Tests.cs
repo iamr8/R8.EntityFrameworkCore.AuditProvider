@@ -136,8 +136,8 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests
 
             var mock = new Audit_UnitTests.MockingAuditEntityEntry(EntityState.Modified, entity, entry.Members);
 
-            var act = () => interceptor.AckAudits(mock, db);
-            act.Should().NotThrow();
+            // A throw here (e.g. buffer overflow) fails the test directly.
+            interceptor.AckAudits(mock, db);
 
             var audits = entity.GetAuditCollection();
             if (changedCount == 0)

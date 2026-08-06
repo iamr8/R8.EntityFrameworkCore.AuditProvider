@@ -396,8 +396,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
 
                 // No change per EF's provider-aware value comparer (handles value objects, converted
                 // types, byte arrays, etc.), with an element-wise fallback for collection properties.
-                var comparer = metadata.GetValueComparer();
-                if (comparer != null ? comparer.Equals(originalValue, currentValue) : Equals(originalValue, currentValue))
+                if (metadata.GetValueComparer().Equals(originalValue, currentValue))
                     continue;
                 if (originalValue is IEnumerable ov && currentValue is IEnumerable cv && ov.Cast<object>().SequenceEqual(cv.Cast<object>()))
                     continue;
