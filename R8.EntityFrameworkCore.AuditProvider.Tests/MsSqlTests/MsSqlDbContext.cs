@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using R8.EntityFrameworkCore.AuditProvider.Abstractions;
+using R8.EntityFrameworkCore.AuditProvider.Tests.Entities;
 using R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Entities;
 
 namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests
@@ -41,6 +42,12 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests
                 .HasConversion(
                     v => JsonSerializer.Serialize(v, AuditProviderConfiguration.JsonOptions),
                     v => !string.IsNullOrWhiteSpace(v) ? JsonSerializer.Deserialize<Audit[]>(v, AuditProviderConfiguration.JsonOptions) : Array.Empty<Audit>());
+
+            modelBuilder.Entity<MyAuditableEntity>()
+                .Property(x => x.Status)
+                .HasConversion(new ValueConverter<AuditStatus, string>(
+                    v => v.ToString(),
+                    v => (AuditStatus)Enum.Parse(typeof(AuditStatus), v)));
         }
     }
 }

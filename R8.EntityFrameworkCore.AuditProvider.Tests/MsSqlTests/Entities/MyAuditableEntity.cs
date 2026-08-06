@@ -8,6 +8,7 @@ public record MyAuditableEntity : AggregateAuditable, IAggregateEntity
 {
     [Key] public int Id { get; set; }
     public string? Name { get; set; }
+    public AuditStatus Status { get; set; }
     [AuditIgnore] public string? LastName { get; set; }
     public double Double { get; set; }
     public DateTime Date { get; set; }

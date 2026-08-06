@@ -7,3 +7,5 @@ riderModule.iml
 .idea/
 .git/
 .vs/
+# BenchmarkDotNet output
+BenchmarkDotNet.Artifacts/

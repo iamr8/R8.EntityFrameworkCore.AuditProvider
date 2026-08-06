@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!-- Standalone dev tool (intentionally NOT in R8.sln): run it with dotnet run -c Release against
+         this project. Kept out of the solution so it does not add BenchmarkDotNet to CI / license checks. -->
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <LangVersion>12.0</LangVersion>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="BenchmarkDotNet" Version="0.14.0"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\R8.EntityFrameworkCore.AuditProvider.Abstractions\R8.EntityFrameworkCore.AuditProvider.Abstractions.csproj"/>
+    </ItemGroup>
+
+</Project>

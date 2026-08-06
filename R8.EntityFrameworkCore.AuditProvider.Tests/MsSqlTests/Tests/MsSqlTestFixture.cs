@@ -65,6 +65,11 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Tests
             // not exist, which the server would otherwise log as a connection failure.
             await MsSqlDbContext.Database.EnsureDeletedAsync();
             await MsSqlDbContext.Database.MigrateAsync();
+            // Status is mapped with an explicit value converter; add its column out-of-band (not via a
+            // migration) to exercise the interceptor's value-converter path across both providers without
+            // an EF10-format migration that would break the net6.0 (EF Core 7) build.
+            await MsSqlDbContext.Database.ExecuteSqlRawAsync(
+                "ALTER TABLE [MyAuditableEntities] ADD [Status] nvarchar(max) NOT NULL DEFAULT 'Active';");
         }
 
         public async

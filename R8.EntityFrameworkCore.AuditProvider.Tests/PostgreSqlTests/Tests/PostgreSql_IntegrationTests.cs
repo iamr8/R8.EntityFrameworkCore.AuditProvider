@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 using R8.EntityFrameworkCore.AuditProvider.Abstractions;
+using R8.EntityFrameworkCore.AuditProvider.Tests.Entities;
 using R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.Entities;
 
 namespace R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.Tests
@@ -579,6 +580,32 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.Tests
             results.Should().OnlyContain(r => r.count == updatesPerEntity + 1);
             results.Should().OnlyContain(r => r.lastFlag == AuditFlag.Changed);
             results.Should().OnlyContain(r => r.changedName == r.expectedName);
+        }
+
+        [Fact]
+        public async Task Should_Record_Converted_Provider_Value_For_ValueConverter_Property()
+        {
+            // Status is an enum mapped to a string column via an explicit value converter. The audit must
+            // record what the provider stores ("Active"/"Inactive"), not the raw CLR/enum value.
+            var entity = new MyAuditableEntity { Name = "x", Status = AuditStatus.Active };
+            PostgreSqlDbContext.Add(entity);
+            await PostgreSqlDbContext.SaveChangesAsync();
+
+            await Task.Delay(500);
+
+            entity.Status = AuditStatus.Inactive;
+            PostgreSqlDbContext.Update(entity);
+            await PostgreSqlDbContext.SaveChangesAsync();
+
+            var audits = entity.GetAuditCollection();
+            audits.Should().NotBeNull();
+
+            var lastAudit = audits!.MaxBy(x => x.DateTime);
+            lastAudit.Flag.Should().Be(AuditFlag.Changed);
+
+            var change = lastAudit.Changes!.Single(c => c.Column == nameof(MyAuditableEntity.Status));
+            change.OldValue!.Value.GetRawText().Should().Be("\"Active\"");
+            change.NewValue!.Value.GetRawText().Should().Be("\"Inactive\"");
         }
     }
 }

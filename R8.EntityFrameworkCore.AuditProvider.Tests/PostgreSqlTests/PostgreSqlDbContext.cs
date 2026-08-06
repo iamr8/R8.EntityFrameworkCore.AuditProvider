@@ -1,4 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using R8.EntityFrameworkCore.AuditProvider.Tests.Entities;
 using R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.Entities;
 
 namespace R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests
@@ -35,6 +37,11 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests
             modelBuilder.Entity<MyAuditableEntity>()
                 .Property(x => x.Payload)
                 .IsRequired(false);
+            modelBuilder.Entity<MyAuditableEntity>()
+                .Property(x => x.Status)
+                .HasConversion(new ValueConverter<AuditStatus, string>(
+                    v => v.ToString(),
+                    v => (AuditStatus)Enum.Parse(typeof(AuditStatus), v)));
             modelBuilder.Entity<MyEntity>();
         }
     }

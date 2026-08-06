@@ -1,10 +1,12 @@
-﻿using System.Collections;
+﻿using System.Buffers;
+using System.Collections;
 using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.Logging;
 using R8.EntityFrameworkCore.AuditProvider.Abstractions;
 
@@ -20,6 +22,20 @@ namespace R8.EntityFrameworkCore.AuditProvider
 
         private readonly ILogger<EntityFrameworkAuditProviderInterceptor> _logger;
 
+        // Framework-owned columns that the provider manages itself; a change to them is never audited as
+        // a property change. ("Audits" covers both IAuditStorage and IAuditJsonStorage — same name.)
+        private static readonly string[] IgnoredChangedProperties =
+        {
+            nameof(IAuditStorage.Audits),
+            nameof(IAuditCreateDate.CreateDate),
+            nameof(IAuditUpdateDate.UpdateDate),
+            nameof(IAuditDeleteDate.DeleteDate)
+        };
+
+        // Starting capacity for the per-save change buffer, rented from ArrayPool. It grows (never throws)
+        // if an entity has more audited property changes than this, so there is no hard cap.
+        private const int InitialChangeBufferCapacity = 16;
+
         /// <summary>
         /// Initializes a new instance of the <see cref="EntityFrameworkAuditProviderInterceptor"/> class.
         /// </summary>
@@ -34,20 +50,27 @@ namespace R8.EntityFrameworkCore.AuditProvider
         }
 
         /// <inheritdoc />
-        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
         {
-            var entries = eventData.Context?.ChangeTracker.Entries().ToArray();
-            if (entries is { Length: > 0})
+            var context = eventData.Context;
+            if (context == null)
+                return base.SavingChangesAsync(eventData, result, cancellationToken);
+
+            // Enumerate only auditable entities (typed) instead of materializing every tracked entry.
+            // One wrapper instance is reused across all entries in this SaveChanges — the loop is
+            // synchronous and single-threaded, so the (stateless) interceptor stays thread-safe.
+            AuditEntityEntry? pooledEntry = null;
+            foreach (var entry in context.ChangeTracker.Entries<IAuditActivator>())
             {
-                for (var index = 0; index < entries.Length; index++)
-                {
-                    var entry = entries[index];
-                    var auditEntry = new AuditEntityEntry(entry);
-                    AckAudits(auditEntry, eventData.Context);
-                }
+                if (entry.State is not (EntityState.Added or EntityState.Deleted or EntityState.Modified))
+                    continue;
+
+                pooledEntry ??= new AuditEntityEntry();
+                pooledEntry.SetEntry(entry);
+                AckAudits(pooledEntry, context);
             }
 
-            return await base.SavingChangesAsync(eventData, result, cancellationToken).ConfigureAwait(false);
+            return base.SavingChangesAsync(eventData, result, cancellationToken);
         }
 
         [DebuggerStepThrough]
@@ -66,7 +89,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
             var hasStorage = auditActivator is IAuditStorageBase;
             AuditUser? auditUser = null;
             AuditFlag? auditFlag = null;
-            var finalChanges = ReadOnlyMemory<AuditChange>.Empty;
+            AuditChange[]? finalChanges = null;
             var canStore = hasStorage;
 
             if (dbContext != null && _options.UserProvider != null && hasStorage)
@@ -88,14 +111,15 @@ namespace R8.EntityFrameworkCore.AuditProvider
                 {
                     if (auditActivator is IAuditSoftDelete entitySoftDelete)
                     {
-                        for (var index = 0; index < entry.Members.Length; index++)
+                        foreach (var memberEntry in entry.Members)
                         {
-                            var propertyEntry = entry.Members[index];
-                            var originalValue = propertyEntry.OriginalValue;
-                            if (originalValue is not bool isDeleted)
+                            if (memberEntry is not PropertyEntry propertyEntry)
+                                continue;
+                            if (propertyEntry.OriginalValue is not bool isDeleted)
                                 continue;
 
-                            if (propertyEntry.Metadata.Name.Equals(nameof(IAuditSoftDelete.IsDeleted), StringComparison.Ordinal) && isDeleted == true)
+                            // Already soft-deleted: don't record another Deleted audit.
+                            if (propertyEntry.Metadata.Name.Equals(nameof(IAuditSoftDelete.IsDeleted), StringComparison.Ordinal) && isDeleted)
                                 return;
                         }
 
@@ -111,20 +135,32 @@ namespace R8.EntityFrameworkCore.AuditProvider
                 }
                 case EntityState.Modified:
                 {
-                    var (deleted, changes) = GetChangedPropertyEntries(entry.Members, hasStorage);
-                    if (deleted.HasValue)
+                    // Rent a change buffer from the pool; it is grown (never a fixed cap) as changes are
+                    // found and returned once the changes have been copied into the audit.
+                    var pool = ArrayPool<AuditChange>.Shared;
+                    var buffer = pool.Rent(InitialChangeBufferCapacity);
+                    var count = 0;
+                    try
                     {
-                        if (changes.Length > 0)
-                            throw new NotSupportedException("Cannot delete/undelete and update at the same time.");
+                        var deleted = GetChangedPropertyEntries(entry.Members, hasStorage, ref buffer, ref count);
+                        if (deleted.HasValue)
+                        {
+                            if (count > 0)
+                                throw new NotSupportedException("Cannot delete/undelete and update at the same time.");
 
-                        if (auditActivator is IAuditSoftDelete softDelete)
-                            softDelete.IsDeleted = deleted.Value;
+                            if (auditActivator is IAuditSoftDelete softDelete)
+                                softDelete.IsDeleted = deleted.Value;
 
-                        PerformDeleteUndelete(entry, auditActivator, deleted.Value, ref auditFlag, ref canStore, hasStorage, currentDateTime);
+                            PerformDeleteUndelete(entry, auditActivator, deleted.Value, ref auditFlag, ref canStore, hasStorage, currentDateTime);
+                        }
+                        else
+                        {
+                            PerformChanged(entry, auditActivator, new ArraySegment<AuditChange>(buffer, 0, count), ref auditFlag, ref canStore, ref finalChanges, hasStorage, currentDateTime);
+                        }
                     }
-                    else
+                    finally
                     {
-                        PerformChanged(entry, auditActivator, changes, ref auditFlag, ref canStore, ref finalChanges, hasStorage, currentDateTime);
+                        pool.Return(buffer, clearArray: true);
                     }
 
                     break;
@@ -147,7 +183,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
                         DateTime = currentDateTime,
                         Flag = auditFlag.Value,
                         User = auditUser,
-                        Changes = finalChanges.Length > 0 ? finalChanges.ToArray() : null,
+                        Changes = finalChanges,
                     };
                     var audits = AppendAudit(auditStorage, audit);
 
@@ -261,7 +297,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
             canStore = isStorage && _options.AuditFlagSupport.Created.HasFlag(AuditFlagState.Storage);
         }
 
-        private void PerformChanged(IEntityEntry entry, IAuditActivator auditActivator, ReadOnlyMemory<AuditChange> changes, ref AuditFlag? auditFlag, ref bool canStore, ref ReadOnlyMemory<AuditChange> finalChanges, bool isStorage, DateTime currentDateTime)
+        private void PerformChanged(IEntityEntry entry, IAuditActivator auditActivator, ArraySegment<AuditChange> changes, ref AuditFlag? auditFlag, ref bool canStore, ref AuditChange[]? finalChanges, bool isStorage, DateTime currentDateTime)
         {
             if (_options.AuditFlagSupport.Changed.HasFlag(AuditFlagState.ActionDate))
             {
@@ -276,14 +312,16 @@ namespace R8.EntityFrameworkCore.AuditProvider
                 if (!isStorage)
                     return;
 
-                if (changes.Length == 0)
+                if (changes.Count == 0)
                 {
                     _logger.NoChangesFound(entry.EntityType.Name, entry.State);
                     return;
                 }
 
                 auditFlag = AuditFlag.Changed;
-                finalChanges = changes;
+                // Copy out of the pooled buffer into a right-sized array kept on the audit; the pooled
+                // buffer is returned by the caller once this method returns.
+                finalChanges = changes.ToArray();
                 _logger.Changed(entry.EntityType.Name, auditFlag);
             }
             else
@@ -327,85 +365,70 @@ namespace R8.EntityFrameworkCore.AuditProvider
                 _logger.UnDeleted(entry.EntityType.Name, auditFlag);
         }
 
-        private (bool? Deleted, ReadOnlyMemory<AuditChange> Changed) GetChangedPropertyEntries(PropertyEntry[] propertyEntries, bool hasAuditStorage)
+        // Writes detected changes into the rented `buffer` (growing it via the pool when full — never a
+        // fixed cap), advancing `count`. Returns the soft-delete transition, if any.
+        private bool? GetChangedPropertyEntries(IEnumerable<MemberEntry> memberEntries, bool hasAuditStorage, ref AuditChange[] buffer, ref int count)
         {
-            Memory<AuditChange> memory = new AuditChange[propertyEntries.Length];
-            var lastIndex = -1;
             bool? deleted = null;
-            for (var index = 0; index < propertyEntries.Length; index++)
+            foreach (var memberEntry in memberEntries)
             {
-                var propertyEntry = propertyEntries[index];
+                if (memberEntry is not PropertyEntry propertyEntry)
+                    continue;
                 if (!propertyEntry.IsModified)
                     continue;
 
-                var propertyType = propertyEntry.Metadata.ClrType;
-                if (propertyEntry.Metadata.PropertyInfo?.GetCustomAttribute<AuditIgnoreAttribute>() != null)
-                    continue;
-
-                var propertyName = propertyEntry.Metadata.Name;
-                if (propertyName.Equals(nameof(IAuditJsonStorage.Audits), StringComparison.Ordinal) ||
-                    propertyName.Equals(nameof(IAuditStorage.Audits), StringComparison.Ordinal) ||
-                    propertyName.Equals(nameof(IAuditCreateDate.CreateDate), StringComparison.Ordinal) ||
-                    propertyName.Equals(nameof(IAuditUpdateDate.UpdateDate), StringComparison.Ordinal) ||
-                    propertyName.Equals(nameof(IAuditDeleteDate.DeleteDate), StringComparison.Ordinal))
-                    continue;
-
-                var currentNull = propertyEntry.CurrentValue is null;
-                var originalNull = propertyEntry.OriginalValue is null;
-                if ((currentNull && originalNull) || propertyEntry.CurrentValue?.Equals(propertyEntry.OriginalValue) == true)
-                    continue;
+                var metadata = propertyEntry.Metadata;
+                var propertyName = metadata.Name;
+                var originalValue = propertyEntry.OriginalValue;
+                var currentValue = propertyEntry.CurrentValue;
 
                 if (string.Equals(propertyName, nameof(IAuditSoftDelete.IsDeleted), StringComparison.Ordinal))
                 {
-                    var isAlreadyDeleted = !originalNull && (bool)propertyEntry.OriginalValue!;
-                    var isNewlyDeleted = !currentNull && (bool)propertyEntry.CurrentValue!;
-                    deleted = isAlreadyDeleted switch
+                    deleted = (originalValue, currentValue) switch
                     {
-                        false when isNewlyDeleted => true,
-                        true when !isNewlyDeleted => false,
+                        (false, true) => true,  // Not deleted -> Deleted
+                        (true, false) => false, // Deleted -> Undeleted
                         _ => null
                     };
 
                     continue;
                 }
 
+                // No change per EF's provider-aware value comparer (handles value objects, converted
+                // types, byte arrays, etc.), with an element-wise fallback for collection properties.
+                if (metadata.GetValueComparer().Equals(originalValue, currentValue))
+                    continue;
+                if (originalValue is IEnumerable ov && currentValue is IEnumerable cv && ov.Cast<object>().SequenceEqual(cv.Cast<object>()))
+                    continue;
+
+                if (metadata.PropertyInfo?.GetCustomAttribute<AuditIgnoreAttribute>() != null || IgnoredChangedProperties.Contains(propertyName, StringComparer.Ordinal))
+                    continue;
+
                 if (!hasAuditStorage)
                     continue;
 
-                if (propertyEntry is { CurrentValue: IEnumerable ce, OriginalValue: IEnumerable oe })
-                {
-                    var currentEnumerator = ce.GetEnumerator();
-                    var originalEnumerator = oe.GetEnumerator();
-                    var currentHasNext = currentEnumerator.MoveNext();
-                    var originalHasNext = originalEnumerator.MoveNext();
-                    while (currentHasNext && originalHasNext)
-                    {
-                        if (!currentEnumerator.Current!.Equals(originalEnumerator.Current))
-                            break;
+                var newString = GetValue(metadata, currentValue);
+                var oldString = GetValue(metadata, originalValue);
 
-                        currentHasNext = currentEnumerator.MoveNext();
-                        originalHasNext = originalEnumerator.MoveNext();
-                    }
-
-                    if (!currentHasNext && !originalHasNext)
-                        continue;
-
-                    if (currentEnumerator is IDisposable ced) ced.Dispose();
-                    if (originalEnumerator is IDisposable oed) oed.Dispose();
-                }
-
-                var newString = GetValue(propertyEntry.CurrentValue, propertyType, currentNull);
-                var oldString = GetValue(propertyEntry.OriginalValue, propertyType, originalNull);
-
-                if (!currentNull && !originalNull && newString.HasValue && oldString.HasValue && IsEqual(newString.Value, oldString.Value))
+                // Skip when the values serialize identically (e.g. different JsonDocument instances with
+                // the same content) — the comparer above is CLR-level and would not catch that.
+                if (newString.HasValue && oldString.HasValue && IsEqual(newString.Value, oldString.Value))
                     continue;
 
-                var auditChange = new AuditChange(propertyName, oldString, newString);
-                memory.Span[++lastIndex] = auditChange;
+                if (count == buffer.Length)
+                {
+                    // Grow: rent a larger buffer, copy, and return the old one to the pool.
+                    var pool = ArrayPool<AuditChange>.Shared;
+                    var larger = pool.Rent(buffer.Length * 2);
+                    Array.Copy(buffer, larger, count);
+                    pool.Return(buffer, clearArray: true);
+                    buffer = larger;
+                }
+
+                buffer[count++] = new AuditChange(propertyName, oldString, newString);
             }
 
-            var array = memory[..(lastIndex + 1)];
-            return (deleted, array);
+            return deleted;
         }
 
         internal static bool IsEqual(JsonElement first, JsonElement second)
@@ -511,22 +534,27 @@ namespace R8.EntityFrameworkCore.AuditProvider
 #endif
         }
 
-        private JsonElement? GetValue(object? value, Type propertyType, bool isNull)
+        private JsonElement? GetValue(IProperty metadata, object? value)
         {
-            if (isNull)
+            if (value is null)
                 return null;
 
-            JsonElement? newString;
-            if (value is JsonDocument jsonDoc)
+            // Respect EF value converters so the audit records what the provider actually stores
+            // (e.g. an enum mapped to a string), not the raw CLR value.
+            var converter = metadata.GetValueConverter();
+            if (converter != null)
             {
-                newString = jsonDoc.RootElement.Clone();
-            }
-            else
-            {
-                newString = JsonSerializer.SerializeToElement(value, propertyType, _options.JsonOptions);
+                var converted = converter.ConvertToProvider(value);
+                if (converted is null)
+                    return null;
+
+                return JsonSerializer.SerializeToElement(converted, converter.ProviderClrType, _options.JsonOptions);
             }
 
-            return newString;
+            if (value is JsonDocument jsonDoc)
+                return jsonDoc.RootElement.Clone();
+
+            return JsonSerializer.SerializeToElement(value, metadata.ClrType, _options.JsonOptions);
         }
     }
 }
