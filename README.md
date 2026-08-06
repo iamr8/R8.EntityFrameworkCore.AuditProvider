@@ -1,12 +1,14 @@
 # R8.EntityFrameworkCore.AuditProvider
 
-A .NET package for Entity Framework, providing comprehensive change tracking with deep insights. Capture creation, updates, deletions, and restorations of entities, including property names, old and new values, stack traces, and user details, all neatly stored in an Audits column as JSON.
+A .NET package for Entity Framework, providing comprehensive change tracking with deep insights. Capture creation, updates, deletions, and restorations of entities, including property names, old and new values, and user details, all neatly stored in an Audits column as JSON.
 
-**Seamless Entity Auditing:** Easily integrate audit functionality into your Entity Framework applications, offering a complete audit trail enriched with stack traces and user information. Gain full visibility into entity lifecycle changes for compliance, debugging, and accountability.
+**Seamless Entity Auditing:** Easily integrate audit functionality into your Entity Framework applications, offering a complete audit trail enriched with user information. Gain full visibility into entity lifecycle changes for compliance, debugging, and accountability.
 
-**Full Entity Lifecycle Visibility:** Track and visualize the complete life cycle of your entities with detailed auditing. In addition to changes, this package records the stack trace of changes and user actions, enabling a deeper understanding of data evolution and robust audit trails.
+**Full Entity Lifecycle Visibility:** Track the complete life cycle of your entities with detailed auditing. For each change this package records the flag (created/changed/deleted/restored), the timestamp, the changed properties with their old and new values, and the user behind the action.
 
-[![Nuget](https://img.shields.io/nuget/vpre/R8.EntityFrameworkCore.AuditProvider)](https://www.nuget.org/packages/R8.EntityFrameworkCore.AuditProvider/) ![Nuget](https://img.shields.io/nuget/dt/R8.EntityFrameworkCore.AuditProvider) ![Commit](https://img.shields.io/github/last-commit/iamr8/R8.EntityFrameworkCore.AuditProvider)
+Targets `net6.0`, `net8.0`, and `net10.0`. The interceptor is registered as a thread-safe singleton, so a single registration is safe to share across all your DbContexts.
+
+[![Nuget](https://img.shields.io/nuget/vpre/R8.EntityFrameworkCore.AuditProvider)](https://www.nuget.org/packages/R8.EntityFrameworkCore.AuditProvider/) ![Nuget](https://img.shields.io/nuget/dt/R8.EntityFrameworkCore.AuditProvider) ![Commit](https://img.shields.io/github/last-commit/iamr8/R8.EntityFrameworkCore.AuditProvider) ![Tests](https://img.shields.io/badge/tests-413%20passed-success)
 
 ### Installation
 
@@ -18,7 +20,7 @@ dotnet add package R8.EntityFrameworkCore.AuditProvider
 
 ### Known Limitations
 
-The Interceptor does not support queries decorated with `.AsNoTracking()` since it is not possible to track changes on entities that are not being tracked.
+The interceptor can only detect changes on **tracked** entities. An entity loaded with `.AsNoTracking()` (or otherwise detached) has no tracked baseline to diff against. To audit an update to such an entity, `Attach` it first and then modify it, so EF captures the original values before the change.
 
 ---
 
@@ -49,7 +51,7 @@ services.AddEntityFrameworkAuditProvider(options =>
         {
             var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
             var username = user.FindFirstValue(ClaimTypes.Name);
-            return new AuditProviderUser(userId, new Dictionary<string, object>
+            return new AuditProviderUser(userId, new Dictionary<string, string>
             {
                 { "Username", username }
             });
@@ -76,7 +78,7 @@ services.AddDbContext<YourDbContext>((serviceProvider, optionsBuilder) =>
 | `AuditFlagSupport` | ` R8.EntityFrameworkCore.AuditProvider.AuditProviderFlagSupport` | Audit flags to include                                      | All flags are included |
 | `MaxStoredAudits`* | `int?`                                                           | Maximum number of audits to store in `Audits` column        | `null`                 |
 | `DateTimeProvider` | `Func<IServiceProvider, DateTime>`                               | DateTime provider to get current date time                  | `DateTime.UtcNow`      |
-| `UserProvider`     | `Func<IServiceProvider, EntityFrameworkAuditUser>`               | User provider to get current user id                        | `null`                 |
+| `UserProvider`     | `Func<IServiceProvider, AuditProviderUser?>`                     | User provider to get current user id                        | `null`                 |
 
 * If the number of audits exceeds this number, the earliest audits (except `Created`) will be removed from the column. If `null`, all audits will be stored.
 
@@ -85,7 +87,8 @@ services.AddDbContext<YourDbContext>((serviceProvider, optionsBuilder) =>
 ### Wiki
 
 - `IAuditActivator` interface: to start auditing entities.
-- `IAuditStorage` interface: to store audits in a column.
+- `IAuditJsonStorage` interface: to store audits in a single JSON column (`JsonElement? Audits`; e.g. `jsonb` on PostgreSQL, `nvarchar(max)` on SQL Server).
+- `IAuditStorage` interface: to store audits as an `Audit[]? Audits` column (serialize/deserialize with `AuditProviderConfiguration.JsonOptions`).
 - `IAuditSoftDelete` interface: to soft-delete entities.
 - `IAuditCreateDate` interface: to store creation date in a column.
 - `IAuditUpdateDate` interface: to store last update/restore date in a column.
@@ -99,7 +102,7 @@ services.AddDbContext<YourDbContext>((serviceProvider, optionsBuilder) =>
 - `Microsoft Sql Server`: [AggregateAuditable.cs](https://github.com/iamr8/R8.EntityFrameworkCore.AuditProvider/blob/master/R8.EntityFrameworkCore.AuditProvider.Tests/MsSqlTests/Entities/AggregateAuditable.cs)
 - or as below (for `PostgreSQL`):
 ```csharp
-public record YourEntity : IAuditActivator, IAuditStorage, IAuditSoftDelete, IAuditCreateDate, IAuditUpdateDate, IAuditDeleteDate
+public record YourEntity : IAuditActivator, IAuditJsonStorage, IAuditSoftDelete, IAuditCreateDate, IAuditUpdateDate, IAuditDeleteDate
 {
     [Key]
     public int Id { get; set; }
@@ -134,20 +137,20 @@ _Highly recommended to test it on a test database first, to avoid any data loss.
 
 ### Considerations
 
-- Since `Microsoft Sql Server` does not support `json` type, `Audits` column will be stored as `nvarchar(max)` and `JsonElement` will be serialized/deserialized to/from `string`. (See [AggregateAuditable.cs](https://github.com/iamr8/R8.EntityFrameworkCore.AuditProvider/blob/master/R8.EntityFrameworkCore.AuditProvider.Tests/MsSqlTests/AggregateAuditable.cs))
+- Since `Microsoft Sql Server` does not support `json` type, `Audits` column will be stored as `nvarchar(max)` and `JsonElement` will be serialized/deserialized to/from `string`. (See [AggregateAuditable.cs](https://github.com/iamr8/R8.EntityFrameworkCore.AuditProvider/blob/master/R8.EntityFrameworkCore.AuditProvider.Tests/MsSqlTests/Entities/AggregateAuditable.cs))
 - The key to **allow auditing entities** is implementation of `IAuditActivator` to your entity.
   - the `IAuditStorage`, `IAuditSoftDelete`, `IAuditCreateDate`, `IAuditUpdateDate`, and `IAuditDeleteDate` interfaces takes effect only if `IAuditActivator` is implemented to entity. If not implemented, the entity will be updated with the proper `SaveChanges`/`SaveChangesAsync` functionality in `Entity Framework Core`.
 - `Deleted` and `UnDeleted` flag cannot be stored simultaneously with `Created` and `Changed` flags.
-- If `IAuditStorage` is implemented to your entity, `Audits` column will be stored in the specified table.
-- If any of `IAuditCreateDate`, `IAuditUpdateDate` or `IAuditDeleteDate` is implemented to entity, the corresponding date will be stored **among** the `Audits` column (of `IAuditStorage` interface) update.
+- If `IAuditStorage` or `IAuditJsonStorage` is implemented to your entity, the `Audits` column will be stored in the specified table.
+- If any of `IAuditCreateDate`, `IAuditUpdateDate` or `IAuditDeleteDate` is implemented to entity, the corresponding date will be stored on its own column **alongside** the `Audits` update.
 - Any support flag in `AuditProviderOptions.AuditFlagSupport` must be written as a flag: `AuditFlagState.ActionDate | AuditFlagState.Storage`
-  - If any of `AuditFlag` enums are included/excluded from `AuditFlagSupport`, the corresponding flag will take action in `Audits` and/or `{Action}Date` column according to the its state in `AuditFlagSupport`. _(For instance, if `AuditFlagSupport.Created = AuditProviderFlagSupport.Excluded`, `IAuditCreateDate` and `IAuditStorage`, also and `Created` flag will be ignored.)_
+  - If any of `AuditFlag` enums are included/excluded from `AuditFlagSupport`, the corresponding flag will take action in `Audits` and/or `{Action}Date` column according to the its state in `AuditFlagSupport`. _(For instance, if `AuditFlagSupport.Created = AuditFlagState.Excluded`, `IAuditCreateDate` and `IAuditStorage`, also and `Created` flag will be ignored.)_
 
 ---
 
 ### Audit Collection
 
-To take advantages of `JsonElement Audits` (as a property in `IAuditStorage` interface):
+To take advantages of `JsonElement Audits` (as a property in the `IAuditJsonStorage` interface):
 
 ```csharp
 var entity = await dbContext.YourEntities.FindAsync(1);
@@ -156,7 +159,7 @@ var audits = entity.GetAuditCollection();
 Audit[] deserializedAudits = audits.ToArray(); // Get audits as array
 Audit creationAudit = audits.First(); // Get created audit
 Audit lastAudit = audits.Last(false); // Get last audit. (false) means to exclude Deleted flag audit, if is the last one.
-Audit[] changes = audit.Track(nameof(entity.Name)); // Get changes of a property
+Audit[] changes = audits.Track(nameof(entity.Name)); // Get changes of a property
 ```
 
 ---

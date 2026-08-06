@@ -10,13 +10,15 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests
         {
             get
             {
+                // Password comes from the TEST_DB_PASSWORD env var in CI (set from a GitHub secret); falls
+                // back to a local default so `dotnet test` works out of the box against a local container.
                 var csb = new NpgsqlConnectionStringBuilder
                 {
                     Host = "localhost",
                     Port = 54322,
                     Database = "r8-audit-test",
                     Username = "postgres",
-                    Password = "MyPassWoRD@#$"
+                    Password = Environment.GetEnvironmentVariable("TEST_DB_PASSWORD") ?? "MyPassWoRD@#$"
                 };
                 return csb.ConnectionString;
             }

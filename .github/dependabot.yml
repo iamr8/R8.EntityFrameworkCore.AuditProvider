@@ -1,0 +1,48 @@
+version: 2
+updates:
+  # NuGet packages. This solution multi-targets net6.0/net8.0/net10.0 and pins several packages to a
+  # different major per TFM via conditional <ItemGroup>s (e.g. System.Text.Json 8.x on net6, 9.x on net8,
+  # 10.x on net10; the same for EF Core and its providers). Dependabot does not see those TFM conditions,
+  # so a cross-major bump would try to move the net6 line onto a net8/net10-only major and raise a false
+  # alarm. We therefore allow only patch/minor updates for the TFM-split packages (which stay framework
+  # compatible) and review major bumps manually.
+  - package-ecosystem: "nuget"
+    directory: "/"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      analyzers:
+        patterns:
+          - "Roslynator*"
+          - "ErrorProne.NET*"
+          - "Meziantou.Analyzer"
+    ignore:
+      - dependency-name: "System.Text.Json"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Microsoft.EntityFrameworkCore.Relational"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Microsoft.EntityFrameworkCore.SqlServer"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Microsoft.EntityFrameworkCore.Tools"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Npgsql.EntityFrameworkCore.PostgreSQL"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Microsoft.NET.Test.Sdk"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "xunit"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "xunit.v3"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "xunit.runner.visualstudio"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "FluentAssertions"
+        update-types: ["version-update:semver-major"]
+
+  # Keep the GitHub Actions used by the workflows up to date.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"

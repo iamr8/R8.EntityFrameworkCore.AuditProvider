@@ -20,6 +20,12 @@ namespace R8.EntityFrameworkCore.AuditProvider
 
         private readonly ILogger<EntityFrameworkAuditProviderInterceptor> _logger;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="EntityFrameworkAuditProviderInterceptor"/> class.
+        /// </summary>
+        /// <param name="options">The audit provider options.</param>
+        /// <param name="serviceProvider">The service provider used to resolve the date-time and user providers.</param>
+        /// <param name="logger">The logger.</param>
         public EntityFrameworkAuditProviderInterceptor(AuditProviderOptions options, IServiceProvider serviceProvider, ILogger<EntityFrameworkAuditProviderInterceptor> logger)
         {
             _options = options;
@@ -27,6 +33,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
             _serviceProvider = serviceProvider;
         }
 
+        /// <inheritdoc />
         public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
         {
             var entries = eventData.Context?.ChangeTracker.Entries().ToArray();
@@ -163,7 +170,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
 
                 if (!hasStorage)
                 {
-                    _logger.LogDebug(AuditEventId.NotAuditable, "Entity {EntityName} with state {EntityState} does not implemented by {Auditable}. So it will be ignored while is not auditable", entry.EntityType.Name, entry.State, nameof(IAuditJsonStorage));
+                    _logger.NotAuditable(entry.EntityType.Name, entry.State, nameof(IAuditJsonStorage));
                 }
             }
         }
@@ -176,7 +183,9 @@ namespace R8.EntityFrameworkCore.AuditProvider
             {
                 case IAuditJsonStorage { Audits: not null } jsonStorage:
                 {
-                    // TODO: this can be bottleneck
+                    // The full audit array is deserialized on each append because audits are persisted as a
+                    // single JSON column: appending requires reading the existing value first. The cost is
+                    // bounded by AuditProviderOptions.MaxStoredAudits, which caps how many audits are kept.
                     existingAudits = jsonStorage.Audits.Value.Deserialize<Audit[]>(_options.JsonOptions);
                     break;
                 }
@@ -248,7 +257,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
             }
 
             auditFlag = AuditFlag.Created;
-            _logger.LogDebug(AuditEventId.Created, "Entity {EntityName} is marked at {AuditFlag}", entry.EntityType.Name, auditFlag);
+            _logger.Created(entry.EntityType.Name, auditFlag);
             canStore = isStorage && _options.AuditFlagSupport.Created.HasFlag(AuditFlagState.Storage);
         }
 
@@ -269,13 +278,13 @@ namespace R8.EntityFrameworkCore.AuditProvider
 
                 if (changes.Length == 0)
                 {
-                    _logger.LogDebug(AuditEventId.NoChangesFound, "Entity {EntityName} with state {EntityState} has no changes", entry.EntityType.Name, entry.State);
+                    _logger.NoChangesFound(entry.EntityType.Name, entry.State);
                     return;
                 }
 
                 auditFlag = AuditFlag.Changed;
                 finalChanges = changes;
-                _logger.LogDebug(AuditEventId.Changed, "Entity {EntityName} is marked as {AuditFlag}", entry.EntityType.Name, auditFlag);
+                _logger.Changed(entry.EntityType.Name, auditFlag);
             }
             else
             {
@@ -312,7 +321,10 @@ namespace R8.EntityFrameworkCore.AuditProvider
                 canStore = isStorage && _options.AuditFlagSupport.UnDeleted.HasFlag(AuditFlagState.Storage);
             }
 
-            _logger.LogDebug(auditFlag == AuditFlag.Deleted ? AuditEventId.Deleted : AuditEventId.UnDeleted, "Entity {EntityName} is marked as {AuditFlag}", entry.EntityType.Name, auditFlag);
+            if (auditFlag == AuditFlag.Deleted)
+                _logger.Deleted(entry.EntityType.Name, auditFlag);
+            else
+                _logger.UnDeleted(entry.EntityType.Name, auditFlag);
         }
 
         private (bool? Deleted, ReadOnlyMemory<AuditChange> Changed) GetChangedPropertyEntries(PropertyEntry[] propertyEntries, bool hasAuditStorage)
@@ -396,8 +408,14 @@ namespace R8.EntityFrameworkCore.AuditProvider
             return (deleted, array);
         }
 
-        private static bool IsEqual(JsonElement first, JsonElement second)
+        internal static bool IsEqual(JsonElement first, JsonElement second)
         {
+#if NET8_0_OR_GREATER
+            // System.Text.Json 9+ (referenced on net8.0 and net10.0) ships a canonical deep comparison.
+            // It is order-insensitive for objects, order-sensitive for arrays, normalizes numbers, and —
+            // unlike the manual walk below — handles numbers outside the decimal range without throwing.
+            return JsonElement.DeepEquals(first, second);
+#else
             switch (first.ValueKind)
             {
                 case JsonValueKind.Object:
@@ -490,6 +508,7 @@ namespace R8.EntityFrameworkCore.AuditProvider
                 default:
                     throw new ArgumentOutOfRangeException();
             }
+#endif
         }
 
         private JsonElement? GetValue(object? value, Type propertyType, bool isNull)

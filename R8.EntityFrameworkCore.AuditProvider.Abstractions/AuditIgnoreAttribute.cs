@@ -1,3 +1,5 @@
+using System;
+
 namespace R8.EntityFrameworkCore.AuditProvider.Abstractions
 {
     /// <summary>
