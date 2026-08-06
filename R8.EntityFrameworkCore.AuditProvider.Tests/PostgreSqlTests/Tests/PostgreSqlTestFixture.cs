@@ -59,13 +59,17 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.Tests
 #endif
             InitializeAsync()
         {
-            var pm = await PostgreSqlDbContext.Database.GetPendingMigrationsAsync();
-            var pendingMigrations = pm.ToArray();
-            if (pendingMigrations.Any())
-                await PostgreSqlDbContext.Database.EnsureDeletedAsync();
-            var canConnect = await PostgreSqlDbContext.Database.CanConnectAsync();
-            if (!canConnect || pendingMigrations.Any())
-                await PostgreSqlDbContext.Database.MigrateAsync();
+            // Apply the schema once (the database persists for the whole test run) and clear all data
+            // before each test. Never dropping the database means EF never probes a non-existent database,
+            // which is what makes PostgreSQL log "FATAL: database ... does not exist" during the run.
+            // TRUNCATE ... CASCADE resets every data table (keeping the migrations history) and gives each
+            // test a clean slate while still committing rows, so the multi-scope/concurrency tests work.
+            await PostgreSqlDbContext.Database.MigrateAsync();
+            await PostgreSqlDbContext.Database.ExecuteSqlRawAsync(
+                "DO $$ DECLARE r RECORD; BEGIN " +
+                "FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> '__EFMigrationsHistory') LOOP " +
+                "EXECUTE 'TRUNCATE TABLE ' || quote_ident(r.tablename) || ' RESTART IDENTITY CASCADE'; " +
+                "END LOOP; END $$;");
         }
 
         public async
@@ -76,7 +80,8 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.Tests
 #endif
             DisposeAsync()
         {
-            await PostgreSqlDbContext.Database.EnsureDeletedAsync();
+            // Data is cleared in InitializeAsync (before each test); the database itself is left in place
+            // so it is never re-probed while missing.
             await ServiceProvider.DisposeAsync();
         }
     }

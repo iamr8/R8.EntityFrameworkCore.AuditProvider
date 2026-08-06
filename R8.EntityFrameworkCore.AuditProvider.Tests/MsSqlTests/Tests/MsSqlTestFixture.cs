@@ -60,13 +60,11 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.MsSqlTests.Tests
 #endif
             InitializeAsync()
         {
-            var pm = await MsSqlDbContext.Database.GetPendingMigrationsAsync();
-            var pendingMigrations = pm.ToArray();
-            if (pendingMigrations.Any())
-                await MsSqlDbContext.Database.EnsureDeletedAsync();
-            var canConnect = await MsSqlDbContext.Database.CanConnectAsync();
-            if (!canConnect || pendingMigrations.Any())
-                await MsSqlDbContext.Database.MigrateAsync();
+            // Recreate a clean schema for each test. Using EnsureDeleted + Migrate (instead of probing
+            // with CanConnect/GetPendingMigrations) avoids connecting to the target database while it does
+            // not exist, which the server would otherwise log as a connection failure.
+            await MsSqlDbContext.Database.EnsureDeletedAsync();
+            await MsSqlDbContext.Database.MigrateAsync();
         }
 
         public async

@@ -1,0 +1,6 @@
+name: "CodeQL config"
+
+# Only the two shipped libraries are the security surface. The test project is not published,
+# so its (nullable-dereference, etc.) findings are noise — exclude it from analysis.
+paths-ignore:
+  - "R8.EntityFrameworkCore.AuditProvider.Tests/**"

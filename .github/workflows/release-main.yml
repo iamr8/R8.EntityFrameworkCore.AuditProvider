@@ -85,6 +85,7 @@ jobs:
         image: postgres:16
         env:
           POSTGRES_PASSWORD: ${{ env.TEST_DB_PASSWORD }}
+          POSTGRES_DB: r8-audit-test
         ports:
           - 54322:5432
         options: >-

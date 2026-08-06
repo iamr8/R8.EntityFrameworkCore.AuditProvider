@@ -41,6 +41,7 @@ jobs:
         with:
           languages: csharp
           queries: security-and-quality
+          config-file: ./.github/codeql/codeql-config.yml
 
       - name: Build
         run: dotnet build R8.sln -c Release
