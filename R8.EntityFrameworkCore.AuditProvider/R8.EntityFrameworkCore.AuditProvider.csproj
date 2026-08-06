@@ -1,62 +1,112 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFrameworks>net6.0;net7.0;net8.0</TargetFrameworks>
+        <TargetFrameworks>net6.0;net8.0;net10.0</TargetFrameworks>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <EnableNETAnalyzers>true</EnableNETAnalyzers>
-        <Version>1.1.2</Version>
-        <Authors>iamr8</Authors>
-        <Description>A .NET package for Entity Framework, providing comprehensive change tracking with deep insights.</Description>
+        <IncludeSymbols>true</IncludeSymbols>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    </PropertyGroup>
+
+    <!-- NuGet package metadata. Version is the source of truth for releases: bump it on develop, and the
+       release workflow publishes it when master is updated. Update RepositoryUrl/Authors if the repo owner differs. -->
+    <PropertyGroup>
+        <Version>1.2.0</Version>
         <PackageId>R8.EntityFrameworkCore.AuditProvider</PackageId>
-        <PackageTags>ef, ef-core, audit, postgres, postgresql, mssql, sql</PackageTags>
+        <Title>R8.EntityFrameworkCore.AuditProvider</Title>
+        <Authors>iamr8</Authors>
+        <Company>iamr8</Company>
+        <Description>A .NET package for Entity Framework, providing comprehensive change tracking with deep insights.</Description>
+        <PackageTags>ef;ef-core;audit;postgres;postgresql;mssql;sql</PackageTags>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <Copyright>Copyright © iamr8</Copyright>
         <PackageProjectUrl>https://github.com/iamr8/R8.EntityFrameworkCore.AuditProvider</PackageProjectUrl>
         <RepositoryUrl>https://github.com/iamr8/R8.EntityFrameworkCore.AuditProvider</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
-        <PackageLicenseExpression>MIT</PackageLicenseExpression>
-        <IncludeSymbols>true</IncludeSymbols>
-        <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <PackageReadmeFile>README.md</PackageReadmeFile>
-        <LangVersion>10</LangVersion>
+        <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <Deterministic>true</Deterministic>
+    </PropertyGroup>
+
+    <!-- LangVersion is pinned per TFM to match the language features each target supports. -->
+    <PropertyGroup Condition="'$(TargetFramework)' == 'net6.0'">
+        <LangVersion>10.0</LangVersion>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(TargetFramework)' == 'net8.0'">
+        <LangVersion>12.0</LangVersion>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0'">
+        <LangVersion>14.0</LangVersion>
     </PropertyGroup>
 
     <ItemGroup>
-        <None Include="$(SolutionDir)README.md" Pack="true" PackagePath=""/>
-        <Content Include="$(SolutionDir)README.md">
-            <Link>README.md</Link>
-            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </Content>
+        <None Include="../README.md" Pack="true" PackagePath="\"/>
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="R8.EntityFrameworkCore.AuditProvider.Abstractions" Version="1.1.1"/>
-        <PackageReference Include="Meziantou.Analyzer" Version="2.0.169">
+        <PackageReference Include="ErrorProne.NET.CoreAnalyzers" Version="0.9.0-beta.4">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="ErrorProne.NET.Structs" Version="0.6.1-beta.1">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Roslynator.Analyzers" Version="4.15.0">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Roslynator.CodeFixes" Version="4.15.0">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Meziantou.Analyzer" Version="3.0.139">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
     </ItemGroup>
 
     <ItemGroup Condition="'$(TargetFramework)' == 'net6.0'">
-        <PackageReference Include="System.Text.Json" Version="6.0.9"/>
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="6.0.26"/>
-    </ItemGroup>
-
-    <ItemGroup Condition="'$(TargetFramework)' == 'net7.0'">
-        <PackageReference Include="System.Text.Json" Version="7.0.4"/>
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="7.0.20"/>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="[7.0.20,8.0.0)"/>
+        <PackageReference Include="System.Text.Json" Version="[8.0.6,9.0.0)"/>
+        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="[8.0.0,10.0)">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
     </ItemGroup>
 
     <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
-        <PackageReference Include="System.Text.Json" Version="8.0.4"/>
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="8.0.8"/>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="[9.0.18,10.0.0)"/>
+        <PackageReference Include="System.Text.Json" Version="[9.0.18,10.0.0)"/>
+        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.301">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.10"/>
+        <PackageReference Include="System.Text.Json" Version="10.0.10"/>
+        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.301">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
     </ItemGroup>
 
     <ItemGroup>
         <InternalsVisibleTo Include="$(AssemblyName).Tests"/>
     </ItemGroup>
 
-    <!--    <ItemGroup>-->
-    <!--        <ProjectReference Include="..\R8.EntityFrameworkCore.AuditProvider.Abstractions\R8.EntityFrameworkCore.AuditProvider.Abstractions.csproj"/>-->
-    <!--    </ItemGroup>-->
+    <ItemGroup>
+        <ProjectReference Include="..\R8.EntityFrameworkCore.AuditProvider.Abstractions\R8.EntityFrameworkCore.AuditProvider.Abstractions.csproj"/>
+    </ItemGroup>
 
 </Project>

@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Diagnostics;
 using System.Text.Json.Serialization;
 
 namespace R8.EntityFrameworkCore.AuditProvider.Abstractions
@@ -34,6 +35,9 @@ namespace R8.EntityFrameworkCore.AuditProvider.Abstractions
         [JsonPropertyName(JsonNames.Audit.User)]
         public AuditUser? User { get; set; }
 
+        /// <summary>
+        /// An empty <see cref="Audit"/> with no changes, no user and <see cref="System.DateTime.MinValue"/>.
+        /// </summary>
         public static Audit Empty = new()
         {
             DateTime = DateTime.MinValue,
