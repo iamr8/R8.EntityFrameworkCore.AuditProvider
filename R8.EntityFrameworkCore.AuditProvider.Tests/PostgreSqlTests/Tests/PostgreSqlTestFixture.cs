@@ -65,6 +65,11 @@ namespace R8.EntityFrameworkCore.AuditProvider.Tests.PostgreSqlTests.Tests
             // TRUNCATE ... CASCADE resets every data table (keeping the migrations history) and gives each
             // test a clean slate while still committing rows, so the multi-scope/concurrency tests work.
             await PostgreSqlDbContext.Database.MigrateAsync();
+            // The Status column (mapped with an explicit value converter) is added out-of-band rather than
+            // via a migration, to exercise the interceptor's value-converter path without adding an
+            // EF10-format migration that would not compile under the net6.0 (EF Core 7) leg.
+            await PostgreSqlDbContext.Database.ExecuteSqlRawAsync(
+                "ALTER TABLE \"MyAuditableEntities\" ADD COLUMN IF NOT EXISTS \"Status\" text NOT NULL DEFAULT 'Active';");
             await PostgreSqlDbContext.Database.ExecuteSqlRawAsync(
                 "DO $$ DECLARE r RECORD; BEGIN " +
                 "FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> '__EFMigrationsHistory') LOOP " +

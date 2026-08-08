@@ -13,7 +13,7 @@
     <!-- NuGet package metadata. Kept in sync with the main package. Version is the source of truth for
        releases: bump it on develop, and the release workflow publishes it when master is updated. -->
     <PropertyGroup>
-        <Version>1.2.0</Version>
+        <Version>1.3.0</Version>
         <PackageId>R8.EntityFrameworkCore.AuditProvider.Abstractions</PackageId>
         <Title>R8.EntityFrameworkCore.AuditProvider.Abstractions</Title>
         <Authors>iamr8</Authors>
